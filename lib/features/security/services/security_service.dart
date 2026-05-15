@@ -6,7 +6,7 @@ import 'package:local_auth/local_auth.dart';
 class SecurityService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final LocalAuthentication _auth = LocalAuthentication();
-  
+
   static const _encryptionKeyKey = 'cortex_encryption_key';
   static const _isPrivateModeKey = 'cortex_private_mode_enabled';
 
@@ -16,7 +16,10 @@ class SecurityService {
   }
 
   Future<void> setPrivateMode(bool enabled) async {
-    await _storage.write(key: _isPrivateModeKey, value: enabled ? 'true' : 'false');
+    await _storage.write(
+      key: _isPrivateModeKey,
+      value: enabled ? 'true' : 'false',
+    );
     if (enabled) {
       await _getOrCreateKey();
     }
@@ -39,11 +42,12 @@ class SecurityService {
 
     final key = await _getOrCreateKey();
     final iv = encrypt.IV.fromSecureRandom(12); // AES-GCM standard IV size
-    final encrypter = encrypt.Encrypter(encrypt.AES(key, mode: encrypt.AESMode.gcm));
+    final encrypter = encrypt.Encrypter(
+      encrypt.AES(key, mode: encrypt.AESMode.gcm),
+    );
 
     final encrypted = encrypter.encrypt(plaintext, iv: iv);
-    
-    // Store IV along with ciphertext
+
     final payload = '${base64Url.encode(iv.bytes)}:${encrypted.base64}';
     return payload;
   }
@@ -58,20 +62,23 @@ class SecurityService {
       final key = await _getOrCreateKey();
       final iv = encrypt.IV(base64Url.decode(parts[0]));
       final ciphertext = encrypt.Encrypted.fromBase64(parts[1]);
-      
-      final encrypter = encrypt.Encrypter(encrypt.AES(key, mode: encrypt.AESMode.gcm));
+
+      final encrypter = encrypt.Encrypter(
+        encrypt.AES(key, mode: encrypt.AESMode.gcm),
+      );
       return encrypter.decrypt(ciphertext, iv: iv);
     } catch (e) {
-      // If decryption fails, it might not be an encrypted string
       return payload;
     }
   }
 
   Future<bool> authenticate() async {
     final canAuthenticateWithBiometrics = await _auth.canCheckBiometrics;
-    final canAuthenticate = canAuthenticateWithBiometrics || await _auth.isDeviceSupported();
-    
-    if (!canAuthenticate) return true; // Fail open if no biometrics setup (or prompt for PIN)
+    final canAuthenticate =
+        canAuthenticateWithBiometrics || await _auth.isDeviceSupported();
+
+    if (!canAuthenticate)
+      return true; // Fail open if no biometrics setup (or prompt for PIN)
 
     try {
       return await _auth.authenticate(

@@ -11,145 +11,141 @@ class NoteListCard extends StatelessWidget {
   final VoidCallback? onTap;
   final String searchQuery;
 
-  const NoteListCard({super.key, required this.note, this.onTap, this.searchQuery = ''});
+  const NoteListCard({
+    super.key,
+    required this.note,
+    this.onTap,
+    this.searchQuery = '',
+  });
 
   @override
   Widget build(BuildContext context) {
-    final todoBlocks = note.blocks
-        .whereType<CheckboxBlock>()
-        .take(3)
-        .toList();
+    final todoBlocks = note.blocks.whereType<CheckboxBlock>().take(3).toList();
 
     return GestureDetector(
       onTap: onTap,
       child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: 0.45),
-                  Colors.white.withValues(alpha: 0.25),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.60),
-                width: 1.2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 20,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 6),
-                ),
-                BoxShadow(
-                  color: Colors.white.withValues(alpha: 0.50),
-                  blurRadius: 1,
-                  spreadRadius: 0,
-                  offset: const Offset(-1, -1),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Title row with more-options
-                Row(
-                  children: [
-                    Expanded(
-                      child: _highlightSearchTerm(
-                        note.title,
-                        TextStyles.noteTitleStyle,
-                        maxLines: 1,
-                      ),
-                    ),
-                    const Icon(
-                      Icons.more_vert_rounded,
-                      color: AppColors.iconDefault,
-                      size: 22,
-                    ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.45),
+                    Colors.white.withValues(alpha: 0.25),
                   ],
                 ),
-
-                // Cover Image Thumbnail
-                if (note.coverImage != null && note.coverImage!.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.file(
-                      File(note.coverImage!),
-                      width: double.infinity,
-                      height: 140,
-                      fit: BoxFit.cover,
-                    ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.60),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 20,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 6),
+                  ),
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: 0.50),
+                    blurRadius: 1,
+                    spreadRadius: 0,
+                    offset: const Offset(-1, -1),
                   ),
                 ],
-
-                // Todo items
-                if (todoBlocks.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  ...todoBlocks.map((block) => _buildTodoItem(block)),
-                ],
-
-                // Content text for non-todo notes
-                if (todoBlocks.isEmpty && note.content.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _highlightSearchTerm(
-                    note.content,
-                    TextStyles.noteContentStyle,
-                    maxLines: 2,
-                  ),
-                ],
-
-                // Tags row + date
-                if (note.tags.isNotEmpty) ...[
-                  const SizedBox(height: 14),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Row(
                     children: [
-                      // Tags
                       Expanded(
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: note.tags
-                              .map((tag) => _buildTag(tag))
-                              .toList(),
+                        child: _highlightSearchTerm(
+                          note.title,
+                          TextStyles.noteTitleStyle,
+                          maxLines: 1,
                         ),
                       ),
-                      // Date
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.calendar_today_outlined,
-                            size: 14,
-                            color: AppColors.textSecondary,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatRelativeDate(note.createdAt),
-                            style: TextStyles.dateStyle,
-                          ),
-                        ],
+                      const Icon(
+                        Icons.more_vert_rounded,
+                        color: AppColors.iconDefault,
+                        size: 22,
                       ),
                     ],
                   ),
+
+                  if (note.coverImage != null &&
+                      note.coverImage!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.file(
+                        File(note.coverImage!),
+                        width: double.infinity,
+                        height: 140,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ],
+
+                  if (todoBlocks.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    ...todoBlocks.map((block) => _buildTodoItem(block)),
+                  ],
+
+                  if (todoBlocks.isEmpty && note.content.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _highlightSearchTerm(
+                      note.content,
+                      TextStyles.noteContentStyle,
+                      maxLines: 2,
+                    ),
+                  ],
+
+                  if (note.tags.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: note.tags
+                                .map((tag) => _buildTag(tag))
+                                .toList(),
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.calendar_today_outlined,
+                              size: 14,
+                              color: AppColors.textSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatRelativeDate(note.createdAt),
+                              style: TextStyles.dateStyle,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 
@@ -164,12 +160,16 @@ class NoteListCard extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(5),
               border: Border.all(color: AppColors.todoCheckbox, width: 1.8),
-              color: block.isChecked ? AppColors.todoCheckbox.withValues(alpha: 0.08) : Colors.transparent,
+              color: block.isChecked
+                  ? AppColors.todoCheckbox.withValues(alpha: 0.08)
+                  : Colors.transparent,
             ),
             child: Icon(
               Icons.check_rounded,
               size: 14,
-              color: block.isChecked ? AppColors.todoCheckbox : Colors.transparent,
+              color: block.isChecked
+                  ? AppColors.todoCheckbox
+                  : Colors.transparent,
             ),
           ),
           const SizedBox(width: 10),
@@ -216,9 +216,18 @@ class NoteListCard extends StatelessWidget {
     }
   }
 
-  Widget _highlightSearchTerm(String text, TextStyle baseStyle, {required int maxLines}) {
+  Widget _highlightSearchTerm(
+    String text,
+    TextStyle baseStyle, {
+    required int maxLines,
+  }) {
     if (searchQuery.isEmpty) {
-      return Text(text, style: baseStyle, maxLines: maxLines, overflow: TextOverflow.ellipsis);
+      return Text(
+        text,
+        style: baseStyle,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+      );
     }
 
     final String lowerText = text.toLowerCase();
@@ -226,7 +235,12 @@ class NoteListCard extends StatelessWidget {
     final int startIndex = lowerText.indexOf(lowerQuery);
 
     if (startIndex == -1) {
-      return Text(text, style: baseStyle, maxLines: maxLines, overflow: TextOverflow.ellipsis);
+      return Text(
+        text,
+        style: baseStyle,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+      );
     }
 
     return RichText(

@@ -41,7 +41,6 @@ class GlassBottomNav extends StatelessWidget {
 
                 return Stack(
                   children: [
-                    // Sliding blue highlight
                     AnimatedPositioned(
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeOutCubic,
@@ -61,7 +60,6 @@ class GlassBottomNav extends StatelessWidget {
                       ),
                     ),
 
-                    // Icons Row
                     Row(
                       children: List.generate(_icons.length, (index) {
                         final isSelected = currentIndex == index;

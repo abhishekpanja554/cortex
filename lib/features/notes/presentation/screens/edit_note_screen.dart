@@ -35,7 +35,6 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     super.initState();
     _titleController = TextEditingController();
 
-    // Prefill if editing an existing note
     if (_isEditing) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final note = ref
@@ -62,7 +61,6 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
               _focusNodes[b.id] = FocusNode();
             }
           }
-          // Merge any adjacent text blocks that might have been saved incorrectly
           _mergeAdjacentTextBlocks();
         } else {
           final id = DateTime.now().millisecondsSinceEpoch.toString();
@@ -96,15 +94,13 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
 
   void _mergeAdjacentTextBlocks() {
     for (int i = 0; i < _blocks.length - 1; i++) {
-      if (_blocks[i] is TextBlock &&
-          _blocks[i + 1] is TextBlock) {
+      if (_blocks[i] is TextBlock && _blocks[i + 1] is TextBlock) {
         final block1 = _blocks[i];
         final block2 = _blocks[i + 1];
 
         final text1 = _controllers[block1.id]?.text ?? '';
         final text2 = _controllers[block2.id]?.text ?? '';
 
-        // Merge text exactly
         final mergedText =
             text1 +
             (text1.isNotEmpty &&
@@ -141,8 +137,10 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     final title = _titleController.text.trim();
 
     final updatedBlocks = _blocks.map((b) {
-      if (b is TextBlock) return b.copyWith(data: _controllers[b.id]?.text ?? '');
-      if (b is CheckboxBlock) return b.copyWith(data: _controllers[b.id]?.text ?? '');
+      if (b is TextBlock)
+        return b.copyWith(data: _controllers[b.id]?.text ?? '');
+      if (b is CheckboxBlock)
+        return b.copyWith(data: _controllers[b.id]?.text ?? '');
       return b;
     }).toList();
 
@@ -168,9 +166,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
               updatedAt: DateTime.now(),
             ),
           );
-    } catch (_) {
-      // Note not found
-    }
+    } catch (_) {}
   }
 
   void _saveNote() {
@@ -178,8 +174,10 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     final title = _titleController.text.trim();
 
     final updatedBlocks = _blocks.map((b) {
-      if (b is TextBlock) return b.copyWith(data: _controllers[b.id]?.text ?? '');
-      if (b is CheckboxBlock) return b.copyWith(data: _controllers[b.id]?.text ?? '');
+      if (b is TextBlock)
+        return b.copyWith(data: _controllers[b.id]?.text ?? '');
+      if (b is CheckboxBlock)
+        return b.copyWith(data: _controllers[b.id]?.text ?? '');
       return b;
     }).toList();
 
@@ -223,12 +221,12 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       setState(() {
         _coverImage ??= xfile.path;
 
-        // Find which block has focus
         int focusedIndex = -1;
         int cursorPosition = -1;
         for (int i = 0; i < _blocks.length; i++) {
           final b = _blocks[i];
-          if ((b is TextBlock || b is CheckboxBlock) && _focusNodes[b.id]?.hasFocus == true) {
+          if ((b is TextBlock || b is CheckboxBlock) &&
+              _focusNodes[b.id]?.hasFocus == true) {
             focusedIndex = i;
             cursorPosition = _controllers[b.id]?.selection.baseOffset ?? -1;
             break;
@@ -236,7 +234,6 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
         }
 
         if (focusedIndex != -1 && cursorPosition != -1) {
-          // Split the text block at cursor
           final b = _blocks[focusedIndex];
           final text = _controllers[b.id]?.text ?? '';
 
@@ -247,10 +244,8 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
           final textBefore = text.substring(0, cursorPosition);
           final textAfter = text.substring(cursorPosition);
 
-          // Update current block
           _controllers[b.id]?.text = textBefore;
 
-          // Insert image block
           final imageId = DateTime.now().millisecondsSinceEpoch.toString();
           _blocks.insert(
             focusedIndex + 1,
@@ -261,24 +256,17 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
             ),
           );
 
-          // Insert new text block with textAfter
           final textId = (DateTime.now().millisecondsSinceEpoch + 1).toString();
           _blocks.insert(
             focusedIndex + 2,
-            Block.text(
-              id: textId,
-              data: textAfter,
-              orderIndex: _blocks.length,
-            ),
+            Block.text(id: textId, data: textAfter, orderIndex: _blocks.length),
           );
           _controllers[textId] = TextEditingController(text: textAfter)
             ..addListener(_onTextChanged);
           _focusNodes[textId] = FocusNode();
 
-          // Request focus on the new text block
           _focusNodes[textId]?.requestFocus();
         } else {
-          // Append to end if no focus
           final imageId = DateTime.now().millisecondsSinceEpoch.toString();
           _blocks.add(
             Block.image(
@@ -290,11 +278,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
 
           final textId = (DateTime.now().millisecondsSinceEpoch + 1).toString();
           _blocks.add(
-            Block.text(
-              id: textId,
-              data: '',
-              orderIndex: _blocks.length,
-            ),
+            Block.text(id: textId, data: '', orderIndex: _blocks.length),
           );
           _controllers[textId] = TextEditingController()
             ..addListener(_onTextChanged);
@@ -330,32 +314,24 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            // Top bar
             SliverToBoxAdapter(child: _buildTopBar()),
 
-            // Title input
             SliverToBoxAdapter(child: _buildTitleInput()),
 
-            // Content input
             SliverToBoxAdapter(child: _buildContentInput()),
 
-            // Action chips
             SliverToBoxAdapter(child: _buildActionChips()),
 
-            // AI Assist section
             SliverToBoxAdapter(child: _buildAiAssistHeader()),
 
-            // AI cards grid
             SliverToBoxAdapter(child: _buildAiGrid()),
 
-            // Bottom padding
             const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
           ],
         ),
       ),
     );
   }
-
 
   Widget _buildSpeedDialMenu() {
     return Container(
@@ -401,7 +377,6 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Row(
         children: [
-          // Back button
           GestureDetector(
             onTap: () => Navigator.of(context).pop(),
             child: Container(
@@ -420,7 +395,6 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
             ),
           ),
 
-          // Title
           Expanded(
             child: Text(
               _isEditing ? AppStrings.editNote : AppStrings.createNote,
@@ -429,7 +403,6 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
             ),
           ),
 
-          // Save button
           GestureDetector(
             onTap: _saveNote,
             child: Container(
@@ -503,33 +476,37 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     );
   }
 
-
   void _splitBlockAtCursor(String blockId) {
     final index = _blocks.indexWhere((b) => b.id == blockId);
     if (index == -1) return;
-    
+
     final text = _controllers[blockId]?.text ?? '';
     int cursorPosition = _controllers[blockId]?.selection.baseOffset ?? -1;
-    
+
     if (cursorPosition < 0 || cursorPosition > text.length) {
       cursorPosition = text.length;
     }
-    
+
     final textBefore = text.substring(0, cursorPosition);
     final textAfter = text.substring(cursorPosition);
-    
+
     _controllers[blockId]?.text = textBefore;
-    
+
     final newId = DateTime.now().millisecondsSinceEpoch.toString();
-    final newBlock = Block.text(id: newId, data: textAfter, orderIndex: index + 1);
-    
+    final newBlock = Block.text(
+      id: newId,
+      data: textAfter,
+      orderIndex: index + 1,
+    );
+
     setState(() {
       _blocks.insert(index + 1, newBlock);
-      _controllers[newId] = TextEditingController(text: textAfter)..addListener(_onTextChanged);
+      _controllers[newId] = TextEditingController(text: textAfter)
+        ..addListener(_onTextChanged);
       _focusNodes[newId] = FocusNode();
       _reindexBlocks();
     });
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNodes[newId]?.requestFocus();
     });
@@ -537,12 +514,15 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
   }
 
   void _reindexBlocks() {
-      for (int i = 0; i < _blocks.length; i++) {
-        final b = _blocks[i];
-        if (b is TextBlock) _blocks[i] = b.copyWith(orderIndex: i);
-        else if (b is ImageBlock) _blocks[i] = b.copyWith(orderIndex: i);
-        else if (b is CheckboxBlock) _blocks[i] = b.copyWith(orderIndex: i);
-      }
+    for (int i = 0; i < _blocks.length; i++) {
+      final b = _blocks[i];
+      if (b is TextBlock)
+        _blocks[i] = b.copyWith(orderIndex: i);
+      else if (b is ImageBlock)
+        _blocks[i] = b.copyWith(orderIndex: i);
+      else if (b is CheckboxBlock)
+        _blocks[i] = b.copyWith(orderIndex: i);
+    }
   }
 
   void _onReorder(int oldIndex, int newIndex) {
@@ -556,33 +536,43 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     });
     _onTextChanged();
   }
-  
+
   void _insertCheckboxBlock() {
-      final newId = DateTime.now().millisecondsSinceEpoch.toString();
-      final newBlock = Block.checkbox(id: newId, data: '', orderIndex: _blocks.length);
-      setState(() {
-          _blocks.add(newBlock);
-          _controllers[newId] = TextEditingController()..addListener(_onTextChanged);
-          _focusNodes[newId] = FocusNode();
-          _reindexBlocks();
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _focusNodes[newId]?.requestFocus();
-      });
+    final newId = DateTime.now().millisecondsSinceEpoch.toString();
+    final newBlock = Block.checkbox(
+      id: newId,
+      data: '',
+      orderIndex: _blocks.length,
+    );
+    setState(() {
+      _blocks.add(newBlock);
+      _controllers[newId] = TextEditingController()
+        ..addListener(_onTextChanged);
+      _focusNodes[newId] = FocusNode();
+      _reindexBlocks();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNodes[newId]?.requestFocus();
+    });
   }
 
   void _insertTextBlock() {
-      final newId = DateTime.now().millisecondsSinceEpoch.toString();
-      final newBlock = Block.text(id: newId, data: '', orderIndex: _blocks.length);
-      setState(() {
-          _blocks.add(newBlock);
-          _controllers[newId] = TextEditingController()..addListener(_onTextChanged);
-          _focusNodes[newId] = FocusNode();
-          _reindexBlocks();
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _focusNodes[newId]?.requestFocus();
-      });
+    final newId = DateTime.now().millisecondsSinceEpoch.toString();
+    final newBlock = Block.text(
+      id: newId,
+      data: '',
+      orderIndex: _blocks.length,
+    );
+    setState(() {
+      _blocks.add(newBlock);
+      _controllers[newId] = TextEditingController()
+        ..addListener(_onTextChanged);
+      _focusNodes[newId] = FocusNode();
+      _reindexBlocks();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNodes[newId]?.requestFocus();
+    });
   }
 
   Widget _buildContentInput() {
@@ -616,26 +606,22 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
               itemCount: _blocks.length,
               onReorder: _onReorder,
               proxyDecorator: (child, index, animation) {
-                return Material(
-                  color: Colors.transparent,
-                  child: child,
-                );
+                return Material(color: Colors.transparent, child: child);
               },
               itemBuilder: (context, index) {
-                 final block = _blocks[index];
-                 return Container(
-                   key: ValueKey(block.id),
-                   padding: const EdgeInsets.symmetric(vertical: 4),
-                   child: _buildBlockWidget(block),
-                 );
-              }
+                final block = _blocks[index];
+                return Container(
+                  key: ValueKey(block.id),
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: _buildBlockWidget(block),
+                );
+              },
             ),
           ),
         ),
       ),
     );
   }
-
 
   Widget _buildBlockWidget(Block block) {
     if (block is ImageBlock) return _buildImageBlock(block);
@@ -655,7 +641,9 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
         Expanded(
           child: Focus(
             onKeyEvent: (node, event) {
-              if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter && !HardwareKeyboard.instance.isShiftPressed) {
+              if (event is KeyDownEvent &&
+                  event.logicalKey == LogicalKeyboardKey.enter &&
+                  !HardwareKeyboard.instance.isShiftPressed) {
                 _splitBlockAtCursor(block.id);
                 return KeyEventResult.handled;
               }
@@ -702,7 +690,9 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
             padding: const EdgeInsets.only(top: 2.0, right: 8.0),
             child: Icon(
               block.isChecked ? Icons.check_box : Icons.check_box_outline_blank,
-              color: block.isChecked ? AppColors.primary : AppColors.iconDefault,
+              color: block.isChecked
+                  ? AppColors.primary
+                  : AppColors.iconDefault,
               size: 20,
             ),
           ),
@@ -710,7 +700,9 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
         Expanded(
           child: Focus(
             onKeyEvent: (node, event) {
-              if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter && !HardwareKeyboard.instance.isShiftPressed) {
+              if (event is KeyDownEvent &&
+                  event.logicalKey == LogicalKeyboardKey.enter &&
+                  !HardwareKeyboard.instance.isShiftPressed) {
                 _splitBlockAtCursor(block.id);
                 return KeyEventResult.handled;
               }
@@ -756,7 +748,9 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
                 setState(() {
                   _blocks.remove(block);
                   if (_coverImage == block.data) {
-                    final nextImage = _blocks.whereType<ImageBlock>().firstOrNull;
+                    final nextImage = _blocks
+                        .whereType<ImageBlock>()
+                        .firstOrNull;
                     _coverImage = nextImage?.data;
                   }
                   _mergeAdjacentTextBlocks();

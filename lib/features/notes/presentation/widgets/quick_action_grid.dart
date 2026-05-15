@@ -18,10 +18,26 @@ class _QuickActionGridState extends State<QuickActionGrid> {
   int _selectedIndex = 1; // Voice Note selected by default
 
   static const _actions = [
-    (icon: Icons.text_fields_rounded, title: AppStrings.textNote, subtitle: AppStrings.textNoteDesc),
-    (icon: Icons.mic_rounded, title: AppStrings.voiceNote, subtitle: AppStrings.voiceNoteDesc),
-    (icon: Icons.image_outlined, title: AppStrings.imageNote, subtitle: AppStrings.imageNoteDesc),
-    (icon: Icons.auto_awesome_outlined, title: AppStrings.aiNote, subtitle: AppStrings.aiNoteDesc),
+    (
+      icon: Icons.text_fields_rounded,
+      title: AppStrings.textNote,
+      subtitle: AppStrings.textNoteDesc,
+    ),
+    (
+      icon: Icons.mic_rounded,
+      title: AppStrings.voiceNote,
+      subtitle: AppStrings.voiceNoteDesc,
+    ),
+    (
+      icon: Icons.image_outlined,
+      title: AppStrings.imageNote,
+      subtitle: AppStrings.imageNoteDesc,
+    ),
+    (
+      icon: Icons.auto_awesome_outlined,
+      title: AppStrings.aiNote,
+      subtitle: AppStrings.aiNoteDesc,
+    ),
   ];
 
   void _onCardTap(int index) {
@@ -149,7 +165,9 @@ class _QuickActionCard extends StatelessWidget {
                       : Colors.white.withValues(alpha: 0.55),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: isFeatured ? 0.25 : 0.70),
+                    color: Colors.white.withValues(
+                      alpha: isFeatured ? 0.25 : 0.70,
+                    ),
                     width: 0.8,
                   ),
                 ),
@@ -160,7 +178,6 @@ class _QuickActionCard extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              // Title
               AnimatedDefaultTextStyle(
                 duration: const Duration(milliseconds: 300),
                 style: isFeatured
@@ -169,7 +186,6 @@ class _QuickActionCard extends StatelessWidget {
                 child: Text(title),
               ),
               const SizedBox(height: 4),
-              // Subtitle
               AnimatedDefaultTextStyle(
                 duration: const Duration(milliseconds: 300),
                 style: isFeatured

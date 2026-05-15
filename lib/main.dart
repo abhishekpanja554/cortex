@@ -9,14 +9,12 @@ import 'package:cortex/core/database/isar_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   final isar = await IsarDatabase.init();
 
   runApp(
     ProviderScope(
-      overrides: [
-        isarProvider.overrideWithValue(isar),
-      ],
+      overrides: [isarProvider.overrideWithValue(isar)],
       child: const MyApp(),
     ),
   );

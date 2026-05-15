@@ -107,13 +107,11 @@ class DioNetworkClient implements NetworkClient {
 
   NetworkException _handleError(DioException error) {
     if (error.response != null) {
-      // The server responded with a status code that falls out of the range of 2xx
       return NetworkException(
         error.message ?? 'Unknown error occurred',
         statusCode: error.response?.statusCode,
       );
     } else {
-      // Something happened in setting up or sending the request that triggered an Error
       return NetworkException(error.message ?? 'Connection error');
     }
   }

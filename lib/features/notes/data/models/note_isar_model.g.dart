@@ -1,9 +1,6 @@
-// GENERATED CODE - DO NOT MODIFY BY HAND
-
 part of 'note_isar_model.dart';
 
 // **************************************************************************
-// IsarCollectionGenerator
 // **************************************************************************
 
 // coverage:ignore-file
@@ -1868,7 +1865,6 @@ extension IsarNoteQueryProperty
 }
 
 // **************************************************************************
-// IsarEmbeddedGenerator
 // **************************************************************************
 
 // coverage:ignore-file

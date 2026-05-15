@@ -42,4 +42,3 @@ class NoteNotifier extends Notifier<NotesState> {
     ref.read(noteRepositoryProvider).deleteNote(id);
   }
 }
-

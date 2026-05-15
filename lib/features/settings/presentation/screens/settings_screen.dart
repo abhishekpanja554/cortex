@@ -37,11 +37,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _togglePrivateMode(bool value) async {
     if (value) {
-      // Must authenticate to enable
       final authSuccess = await _securityService.authenticate();
       if (!authSuccess) return;
     }
-    
+
     await _securityService.setPrivateMode(value);
     setState(() {
       _isPrivateModeEnabled = value;
@@ -54,16 +53,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final List<Map<String, dynamic>> dump = [];
 
       for (final note in notesState.notes) {
-        final blocksData = note.blocks.map((b) => {
-          'id': b.id,
-          'data': () {
-            if (b is TextBlock) return b.data;
-            if (b is ImageBlock) return b.data;
-            if (b is CheckboxBlock) return {'text': b.data, 'isChecked': b.isChecked};
-            return '';
-          }(),
-          'orderIndex': b.orderIndex,
-        }).toList();
+        final blocksData = note.blocks
+            .map(
+              (b) => {
+                'id': b.id,
+                'data': () {
+                  if (b is TextBlock) return b.data;
+                  if (b is ImageBlock) return b.data;
+                  if (b is CheckboxBlock)
+                    return {'text': b.data, 'isChecked': b.isChecked};
+                  return '';
+                }(),
+                'orderIndex': b.orderIndex,
+              },
+            )
+            .toList();
 
         dump.add({
           'id': note.id,
@@ -76,7 +80,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
 
       final jsonString = jsonEncode(dump);
-      
+
       final directory = await getApplicationDocumentsDirectory();
       final file = File('${directory.path}/cortex_backup.json');
       await file.writeAsString(jsonString);
@@ -88,9 +92,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
       }
     }
   }
@@ -118,10 +122,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 contentPadding: EdgeInsets.zero,
                 title: const Text(
                   "Private Mode",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
                 subtitle: const Text(
                   "Encrypt notes and require FaceID to unlock",
@@ -146,10 +147,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               title: const Text(
                 "Export Data",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
               subtitle: const Text(
                 "Export all notes to a JSON file",

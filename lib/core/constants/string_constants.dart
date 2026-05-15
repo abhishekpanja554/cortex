@@ -8,10 +8,8 @@ class AppStrings {
   static const String addNote = 'Add Note';
   static const String notes = 'Notes';
 
-  // Search
   static const String searchHint = 'Search notes, tags...';
 
-  // Quick Actions
   static const String textNote = 'Text Note';
   static const String voiceNote = 'Voice Note';
   static const String imageNote = 'Image Note';
@@ -21,7 +19,6 @@ class AppStrings {
   static const String imageNoteDesc = 'Capture notes from images';
   static const String aiNoteDesc = 'Create notes with AI assistance';
 
-  // Sections
   static const String recentNotes = 'Recent Notes';
 
   // Edit / Create Note Screen

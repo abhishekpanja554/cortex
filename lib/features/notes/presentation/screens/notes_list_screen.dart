@@ -34,18 +34,20 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   @override
   Widget build(BuildContext context) {
     final notesState = ref.watch(noteNotifierProvider);
-    
+
     final filteredNotes = notesState.notes.where((note) {
       if (_searchQuery.isEmpty) return true;
       final query = _searchQuery.toLowerCase();
       if (note.title.toLowerCase().contains(query)) return true;
       if (note.content.toLowerCase().contains(query)) return true;
-      if (note.blocks.any((b) => b.data.toLowerCase().contains(query))) return true;
+      if (note.blocks.any((b) => b.data.toLowerCase().contains(query)))
+        return true;
       return false;
     }).toList();
 
     // Sort notes: most recently updated or created first
-    final sortedNotes = List.of(filteredNotes)..sort((a, b) {
+    final sortedNotes = List.of(filteredNotes)
+      ..sort((a, b) {
         final aDate = a.updatedAt ?? a.createdAt;
         final bDate = b.updatedAt ?? b.createdAt;
         return bDate.compareTo(aDate);
@@ -54,10 +56,8 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     return SafeArea(
       child: CustomScrollView(
         slivers: [
-          // Profile Header
           const SliverToBoxAdapter(child: ProfileHeader()),
 
-          // Search Bar
           SliverToBoxAdapter(
             child: SearchBarWidget(
               onChanged: (value) {
@@ -68,7 +68,6 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             ),
           ),
 
-          // Quick Action Grid
           SliverToBoxAdapter(
             child: QuickActionGrid(onTextNoteTap: _navigateToCreateNote),
           ),
@@ -84,7 +83,6 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             ),
           ),
 
-          // Notes list
           SliverList.builder(
             itemCount: sortedNotes.length,
             itemBuilder: (context, index) {
@@ -93,14 +91,21 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                 key: ValueKey(note.id),
                 direction: DismissDirection.endToStart,
                 background: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.red.withValues(alpha: 0.8),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.only(right: 20),
-                  child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                  child: const Icon(
+                    Icons.delete_outline,
+                    color: Colors.white,
+                    size: 28,
+                  ),
                 ),
                 onDismissed: (_) {
                   ref.read(noteNotifierProvider.notifier).deleteNote(note.id);
@@ -126,7 +131,6 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             },
           ),
 
-          // Bottom padding
           const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
         ],
       ),

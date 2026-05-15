@@ -41,7 +41,6 @@ class IsarBlock {
 
 enum IsarBlockType { text, image, todo }
 
-// Mapping Extension Methods
 extension IsarNoteMapper on IsarNote {
   domain.Note toDomain() {
     return domain.Note(

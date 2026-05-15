@@ -37,7 +37,8 @@ class _AppBaseState extends ConsumerState<AppBase> {
             bottom: 0,
             child: GlassBottomNav(
               currentIndex: currentTab,
-              onTap: (index) => ref.read(appStateProvider.notifier).changeTab(index),
+              onTap: (index) =>
+                  ref.read(appStateProvider.notifier).changeTab(index),
             ),
           ),
         ],

@@ -11,7 +11,6 @@ class ProfileHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Row(
         children: [
-          // Avatar
           Container(
             width: 48,
             height: 48,
@@ -24,7 +23,6 @@ class ProfileHeader extends StatelessWidget {
           ),
           const SizedBox(width: 12),
 
-          // Name & subtitle
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -36,11 +34,9 @@ class ProfileHeader extends StatelessWidget {
             ),
           ),
 
-          // Settings icon
           _buildIconButton(Icons.settings_outlined),
           const SizedBox(width: 8),
 
-          // Notification icon
           _buildIconButton(Icons.notifications_none_rounded),
         ],
       ),

@@ -13,7 +13,8 @@ class LockScreen extends ConsumerStatefulWidget {
   ConsumerState<LockScreen> createState() => _LockScreenState();
 }
 
-class _LockScreenState extends ConsumerState<LockScreen> with WidgetsBindingObserver {
+class _LockScreenState extends ConsumerState<LockScreen>
+    with WidgetsBindingObserver {
   bool _isAuthenticated = false;
   bool _isAuthenticating = false;
   final SecurityService _securityService = SecurityService();
@@ -64,13 +65,13 @@ class _LockScreenState extends ConsumerState<LockScreen> with WidgetsBindingObse
 
   Future<void> _authenticate() async {
     if (_isAuthenticating) return;
-    
+
     setState(() {
       _isAuthenticating = true;
     });
 
     final success = await _securityService.authenticate();
-    
+
     if (mounted) {
       setState(() {
         _isAuthenticated = success;
@@ -88,9 +89,8 @@ class _LockScreenState extends ConsumerState<LockScreen> with WidgetsBindingObse
     return Scaffold(
       body: Stack(
         children: [
-          // Render the app in the background, but blurred
           widget.child,
-          
+
           Positioned.fill(
             child: ClipRect(
               child: BackdropFilter(
@@ -117,7 +117,9 @@ class _LockScreenState extends ConsumerState<LockScreen> with WidgetsBindingObse
                         ),
                         const SizedBox(height: 40),
                         if (_isAuthenticating)
-                          const CircularProgressIndicator(color: AppColors.primary)
+                          const CircularProgressIndicator(
+                            color: AppColors.primary,
+                          )
                         else
                           ElevatedButton.icon(
                             onPressed: _authenticate,
@@ -126,7 +128,10 @@ class _LockScreenState extends ConsumerState<LockScreen> with WidgetsBindingObse
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
