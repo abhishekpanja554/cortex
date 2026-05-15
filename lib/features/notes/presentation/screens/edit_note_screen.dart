@@ -300,6 +300,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
         floatingActionButton: Padding(
           padding: const EdgeInsets.only(bottom: 100),
           child: FloatingActionButton.extended(
+            heroTag: null,
             onPressed: () {
               showModalBottomSheet(
                 context: context,
