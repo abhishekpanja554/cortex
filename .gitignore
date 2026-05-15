@@ -43,3 +43,18 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Platform-specific code
+/android/
+/ios/
+/linux/
+/macos/
+/web/
+/windows/
+
+# Generated files
+*.g.dart
+*.freezed.dart
+
+# Scratch directory
+scratch/
