@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:cortex/features/notes/data/repositories/note_repository.dart';
 import 'package:cortex/features/notes/domain/entities/note.dart';
-import 'package:cortex/features/notes/presentation/notifiers/note_notifier.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,15 +20,14 @@ void main() {
 
   setUp(() {
     mockRepository = MockNoteRepository();
-    
+
     // Set up the default stream behavior for the mock
-    when(() => mockRepository.watchAllNotes())
-        .thenAnswer((_) => Stream.value([]));
+    when(
+      () => mockRepository.watchAllNotes(),
+    ).thenAnswer((_) => Stream.value([]));
 
     container = ProviderContainer(
-      overrides: [
-        noteRepositoryProvider.overrideWithValue(mockRepository),
-      ],
+      overrides: [noteRepositoryProvider.overrideWithValue(mockRepository)],
     );
   });
 
@@ -45,9 +43,10 @@ void main() {
 
   test('state updates when repository stream emits new notes', () async {
     final controller = StreamController<List<Note>>();
-    
-    when(() => mockRepository.watchAllNotes())
-        .thenAnswer((_) => controller.stream);
+
+    when(
+      () => mockRepository.watchAllNotes(),
+    ).thenAnswer((_) => controller.stream);
 
     final note = Note(
       id: '1',
@@ -61,14 +60,14 @@ void main() {
 
     // Emitting notes
     controller.add([note]);
-    
+
     // Wait for stream to process
     await Future.delayed(Duration.zero);
-    
+
     final state = container.read(noteNotifierProvider);
     expect(state.notes.length, 1);
     expect(state.notes.first.title, 'Test Note');
-    
+
     await controller.close();
   });
 

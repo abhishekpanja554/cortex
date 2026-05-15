@@ -293,41 +293,44 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.backgroundScaffold,
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 100),
-        child: FloatingActionButton.extended(
-          onPressed: () {
-            showModalBottomSheet(
-              context: context,
-              backgroundColor: Colors.transparent,
-              builder: (ctx) => _buildSpeedDialMenu(),
-            );
-          },
-          icon: const Icon(Icons.add),
-          label: const Text("Block"),
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+    return Hero(
+      tag: widget.noteId != null ? 'note_${widget.noteId}' : UniqueKey(),
+      child: Scaffold(
+        backgroundColor: AppColors.backgroundScaffold,
+        floatingActionButton: Padding(
+          padding: const EdgeInsets.only(bottom: 100),
+          child: FloatingActionButton.extended(
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                backgroundColor: Colors.transparent,
+                builder: (ctx) => _buildSpeedDialMenu(),
+              );
+            },
+            icon: const Icon(Icons.add),
+            label: const Text("Block"),
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(child: _buildTopBar()),
+        body: SafeArea(
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(child: _buildTopBar()),
 
-            SliverToBoxAdapter(child: _buildTitleInput()),
+              SliverToBoxAdapter(child: _buildTitleInput()),
 
-            SliverToBoxAdapter(child: _buildContentInput()),
+              SliverToBoxAdapter(child: _buildContentInput()),
 
-            SliverToBoxAdapter(child: _buildActionChips()),
+              SliverToBoxAdapter(child: _buildActionChips()),
 
-            SliverToBoxAdapter(child: _buildAiAssistHeader()),
+              SliverToBoxAdapter(child: _buildAiAssistHeader()),
 
-            SliverToBoxAdapter(child: _buildAiGrid()),
+              SliverToBoxAdapter(child: _buildAiGrid()),
 
-            const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
-          ],
+              const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+            ],
+          ),
         ),
       ),
     );
