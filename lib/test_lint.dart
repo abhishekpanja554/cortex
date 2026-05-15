@@ -1,6 +1,0 @@
-void foo(int a, int b) {}
-
-void main() {
-  foo(1, 2);
-  print("Hello");
-}
