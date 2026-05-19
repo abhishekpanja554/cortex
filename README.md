@@ -1,4 +1,4 @@
-# Cortex 🧠
+# Cortex 🧠 (WIP)
 
 **Cortex** is a modern, dynamic, and highly secure block-based note-taking application built with Flutter. It completely reimagines how you write, organize, and protect your thoughts locally on your device.
 
