@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/core/constants/text_styles.dart';
@@ -100,106 +98,100 @@ class _QuickActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            gradient: isFeatured
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.voiceNoteStart.withValues(alpha: 0.85),
-                      AppColors.voiceNoteEnd.withValues(alpha: 0.75),
-                    ],
-                  )
-                : LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.65),
-                      Colors.white.withValues(alpha: 0.40),
-                    ],
-                  ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isFeatured
-                  ? Colors.white.withValues(alpha: 0.30)
-                  : Colors.white.withValues(alpha: 0.60),
-              width: 1.2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isFeatured
-                    ? AppColors.primary.withValues(alpha: 0.25)
-                    : Colors.black.withValues(alpha: 0.06),
-                blurRadius: 20,
-                spreadRadius: 1,
-                offset: const Offset(0, 6),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        gradient: isFeatured
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.voiceNoteStart.withValues(alpha: 0.95),
+                  AppColors.voiceNoteEnd.withValues(alpha: 0.90),
+                ],
+              )
+            : LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withValues(alpha: 0.92),
+                  Colors.white.withValues(alpha: 0.85),
+                ],
               ),
-              BoxShadow(
-                color: Colors.white.withValues(alpha: isFeatured ? 0.10 : 0.50),
-                blurRadius: 1,
-                spreadRadius: 0,
-                offset: const Offset(-1, -1),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Icon container — frosted inner glass
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutCubic,
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: isFeatured
-                      ? Colors.white.withValues(alpha: 0.18)
-                      : Colors.white.withValues(alpha: 0.55),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.white.withValues(
-                      alpha: isFeatured ? 0.25 : 0.70,
-                    ),
-                    width: 0.8,
-                  ),
-                ),
-                child: Icon(
-                  icon,
-                  size: 22,
-                  color: isFeatured ? Colors.white : AppColors.primary,
-                ),
-              ),
-              const Spacer(),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 300),
-                style: isFeatured
-                    ? TextStyles.quickActionTitleWhite
-                    : TextStyles.quickActionTitle,
-                child: Text(title),
-              ),
-              const SizedBox(height: 4),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 300),
-                style: isFeatured
-                    ? TextStyles.quickActionSubtitleWhite
-                    : TextStyles.quickActionSubtitle,
-                child: Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isFeatured
+              ? Colors.white.withValues(alpha: 0.30)
+              : Colors.white.withValues(alpha: 0.65),
+          width: 1.2,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: isFeatured
+                ? AppColors.primary.withValues(alpha: 0.25)
+                : Colors.black.withValues(alpha: 0.06),
+            blurRadius: 20,
+            spreadRadius: 1,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: Colors.white.withValues(alpha: isFeatured ? 0.10 : 0.50),
+            blurRadius: 1,
+            spreadRadius: 0,
+            offset: const Offset(-1, -1),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Icon container — frosted inner glass
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: isFeatured
+                  ? Colors.white.withValues(alpha: 0.18)
+                  : Colors.white.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.white.withValues(
+                  alpha: isFeatured ? 0.25 : 0.70,
+                ),
+                width: 0.8,
+              ),
+            ),
+            child: Icon(
+              icon,
+              size: 22,
+              color: isFeatured ? Colors.white : AppColors.primary,
+            ),
+          ),
+          const Spacer(),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 300),
+            style: isFeatured
+                ? TextStyles.quickActionTitleWhite
+                : TextStyles.quickActionTitle,
+            child: Text(title),
+          ),
+          const SizedBox(height: 4),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 300),
+            style: isFeatured
+                ? TextStyles.quickActionSubtitleWhite
+                : TextStyles.quickActionSubtitle,
+            child: Text(
+              subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }

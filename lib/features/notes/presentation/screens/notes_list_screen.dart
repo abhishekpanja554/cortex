@@ -1,3 +1,4 @@
+import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/core/constants/text_styles.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
@@ -58,8 +59,18 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
         slivers: [
           const SliverToBoxAdapter(child: ProfileHeader()),
 
-          SliverToBoxAdapter(
-            child: SearchBarWidget(
+          SliverAppBar(
+            pinned: true,
+            primary: false,
+            elevation: 0,
+            scrolledUnderElevation: 4,
+            shadowColor: Colors.black.withValues(alpha: 0.2),
+            backgroundColor: AppColors.backgroundScaffold,
+            surfaceTintColor: Colors.transparent,
+            automaticallyImplyLeading: false,
+            titleSpacing: 0,
+            toolbarHeight: 64,
+            title: SearchBarWidget(
               onChanged: (value) {
                 setState(() {
                   _searchQuery = value;

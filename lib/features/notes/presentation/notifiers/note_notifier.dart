@@ -10,6 +10,9 @@ class NoteNotifier extends Notifier<NotesState> {
 
   @override
   NotesState build() {
+    ref.onDispose(() {
+      _subscription?.cancel();
+    });
     _initSubscription();
     return const NotesState(notes: []);
   }

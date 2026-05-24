@@ -10,9 +10,14 @@ class SecurityService {
   static const _encryptionKeyKey = 'cortex_encryption_key';
   static const _isPrivateModeKey = 'cortex_private_mode_enabled';
 
+  bool? _cachedIsPrivateMode;
+  encrypt.Key? _cachedKey;
+
   Future<bool> get isPrivateModeEnabled async {
+    if (_cachedIsPrivateMode != null) return _cachedIsPrivateMode!;
     final val = await _storage.read(key: _isPrivateModeKey);
-    return val == 'true';
+    _cachedIsPrivateMode = val == 'true';
+    return _cachedIsPrivateMode!;
   }
 
   Future<void> setPrivateMode(bool enabled) async {
@@ -20,20 +25,24 @@ class SecurityService {
       key: _isPrivateModeKey,
       value: enabled ? 'true' : 'false',
     );
+    _cachedIsPrivateMode = enabled;
     if (enabled) {
       await _getOrCreateKey();
     }
   }
 
   Future<encrypt.Key> _getOrCreateKey() async {
+    if (_cachedKey != null) return _cachedKey!;
     String? keyBase64 = await _storage.read(key: _encryptionKeyKey);
     if (keyBase64 == null) {
       final key = encrypt.Key.fromSecureRandom(32);
       keyBase64 = base64Url.encode(key.bytes);
       await _storage.write(key: _encryptionKeyKey, value: keyBase64);
+      _cachedKey = key;
       return key;
     }
-    return encrypt.Key(base64Url.decode(keyBase64));
+    _cachedKey = encrypt.Key(base64Url.decode(keyBase64));
+    return _cachedKey!;
   }
 
   Future<String> encryptData(String plaintext) async {
@@ -77,8 +86,9 @@ class SecurityService {
     final canAuthenticate =
         canAuthenticateWithBiometrics || await _auth.isDeviceSupported();
 
-    if (!canAuthenticate)
+    if (!canAuthenticate) {
       return true; // Fail open if no biometrics setup (or prompt for PIN)
+    }
 
     try {
       return await _auth.authenticate(
