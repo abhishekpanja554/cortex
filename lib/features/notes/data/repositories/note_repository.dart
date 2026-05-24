@@ -67,18 +67,26 @@ class IsarNoteRepository {
             try {
               final domainNote = isarNote.toDomain();
 
-              // Decrypt title and content concurrently
-              final titleFuture = _securityService.decryptData(domainNote.title);
-              final contentFuture = _securityService.decryptData(domainNote.content);
+              // decrypting title and content at the same time to make it faster
+              final titleFuture = _securityService.decryptData(
+                domainNote.title,
+              );
+              final contentFuture = _securityService.decryptData(
+                domainNote.content,
+              );
 
               // Decrypt blocks concurrently
               final blocksFuture = Future.wait(
                 domainNote.blocks.map((b) async {
                   if (b is domain.TextBlock) {
-                    final decryptedData = await _securityService.decryptData(b.data);
+                    final decryptedData = await _securityService.decryptData(
+                      b.data,
+                    );
                     return b.copyWith(data: decryptedData);
                   } else if (b is domain.CheckboxBlock) {
-                    final decryptedData = await _securityService.decryptData(b.data);
+                    final decryptedData = await _securityService.decryptData(
+                      b.data,
+                    );
                     return b.copyWith(data: decryptedData);
                   } else {
                     return b;
@@ -106,7 +114,7 @@ class IsarNoteRepository {
 
               return decryptedNote;
             } catch (e) {
-              // Skip corrupted or un-decryptable note gracefully
+              // just skip it if its corrupted or we cant decrypt it for some reason... better than crashing
               return null;
             }
           }),
@@ -121,7 +129,7 @@ class IsarNoteRepository {
 
   Future<void> deleteNote(String id) async {
     try {
-      _decryptedCache.remove(id); // Invalidate cache entry
+      _decryptedCache.remove(id); // invalidate cache again here just to be safe
       await _isar.writeTxn(() async {
         await _isar.isarNotes.deleteByUuid(id);
       });
@@ -136,9 +144,5 @@ class _DecryptedCacheEntry {
   final DateTime? updatedAt;
   final DateTime? createdAt;
 
-  _DecryptedCacheEntry({
-    required this.note,
-    this.updatedAt,
-    this.createdAt,
-  });
+  _DecryptedCacheEntry({required this.note, this.updatedAt, this.createdAt});
 }

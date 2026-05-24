@@ -50,7 +50,7 @@ class SecurityService {
     if (!isEnabled) return plaintext;
 
     final key = await _getOrCreateKey();
-    final iv = encrypt.IV.fromSecureRandom(12); // AES-GCM standard IV size
+    final iv = encrypt.IV.fromSecureRandom(12);
     final encrypter = encrypt.Encrypter(
       encrypt.AES(key, mode: encrypt.AESMode.gcm),
     );
@@ -87,12 +87,12 @@ class SecurityService {
         canAuthenticateWithBiometrics || await _auth.isDeviceSupported();
 
     if (!canAuthenticate) {
-      return true; // Fail open if no biometrics setup (or prompt for PIN)
+      return true; // fail open if no biometics setup (TODO: maybe prompt for PIN instead??)
     }
 
     try {
       return await _auth.authenticate(
-        localizedReason: 'Please authenticate to access Cortex',
+        localizedReason: 'Pls authenticate to access Cortex',
         persistAcrossBackgrounding: true,
         biometricOnly: false,
       );

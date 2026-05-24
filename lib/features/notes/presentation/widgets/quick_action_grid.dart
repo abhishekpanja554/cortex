@@ -13,7 +13,7 @@ class QuickActionGrid extends StatefulWidget {
 }
 
 class _QuickActionGridState extends State<QuickActionGrid> {
-  int _selectedIndex = 1; // Voice Note selected by default
+  int _selectedIndex = 1; // voice note selected by defualt cause its used most
 
   static const _actions = [
     (
@@ -41,7 +41,7 @@ class _QuickActionGridState extends State<QuickActionGrid> {
   void _onCardTap(int index) {
     setState(() => _selectedIndex = index);
 
-    // Navigate for Text Note (index 0)
+    // naviagte to text note if index 0
     if (index == 0) {
       widget.onTextNoteTap?.call();
     }
@@ -147,7 +147,7 @@ class _QuickActionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Icon container — frosted inner glass
+          // icon container - kinda like frosted glass effect
           AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutCubic,
