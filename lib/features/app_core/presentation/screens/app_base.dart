@@ -1,3 +1,4 @@
+import 'package:animations/animations.dart';
 import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/features/app_core/presentation/providers/providers.dart';
@@ -17,9 +18,9 @@ class AppBase extends ConsumerStatefulWidget {
 
 class _AppBaseState extends ConsumerState<AppBase> {
   final List<Widget> _pages = [
-    const NotesListScreen(),
-    const Center(child: Text(AppStrings.business)),
-    const SettingsScreen(),
+    const NotesListScreen(key: ValueKey('notes_list')),
+    const Center(key: ValueKey('business'), child: Text(AppStrings.business)),
+    const SettingsScreen(key: ValueKey('settings')),
   ];
 
   @override
@@ -50,12 +51,21 @@ class _AppBaseState extends ConsumerState<AppBase> {
   Widget build(BuildContext context) {
     final currentTab = ref.watch(appStateProvider).currentTab;
     return Scaffold(
-      backgroundColor: AppColors.backgroundScaffold,
-
+      backgroundColor: AppColors.searchBarBackground,
       extendBody: true,
       body: Stack(
         children: [
-          _pages[currentTab],
+          PageTransitionSwitcher(
+            duration: const Duration(milliseconds: 400),
+            transitionBuilder: (child, primaryAnimation, secondaryAnimation) {
+              return FadeThroughTransition(
+                animation: primaryAnimation,
+                secondaryAnimation: secondaryAnimation,
+                child: child,
+              );
+            },
+            child: _pages[currentTab],
+          ),
           Positioned(
             left: 0,
             right: 0,

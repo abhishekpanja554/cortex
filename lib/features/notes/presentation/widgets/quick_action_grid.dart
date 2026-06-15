@@ -1,12 +1,12 @@
+import 'package:animations/animations.dart';
 import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/core/constants/text_styles.dart';
+import 'package:cortex/features/notes/presentation/screens/edit_note_screen.dart';
 import 'package:flutter/material.dart';
 
 class QuickActionGrid extends StatefulWidget {
-  final VoidCallback? onTextNoteTap;
-
-  const QuickActionGrid({super.key, this.onTextNoteTap});
+  const QuickActionGrid({super.key});
 
   @override
   State<QuickActionGrid> createState() => _QuickActionGridState();
@@ -39,11 +39,8 @@ class _QuickActionGridState extends State<QuickActionGrid> {
   ];
 
   void _onCardTap(int index) {
-    setState(() => _selectedIndex = index);
-
-    // naviagte to text note if index 0
-    if (index == 0) {
-      widget.onTextNoteTap?.call();
+    if (index != 0) {
+      setState(() => _selectedIndex = index);
     }
   }
 
@@ -64,6 +61,33 @@ class _QuickActionGridState extends State<QuickActionGrid> {
         itemBuilder: (context, index) {
           final action = _actions[index];
           final isSelected = index == _selectedIndex;
+
+          if (index == 0) {
+            return OpenContainer(
+              transitionType: ContainerTransitionType.fadeThrough,
+              openBuilder: (context, _) => const EditNoteScreen(),
+              closedElevation: 0,
+              closedShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              closedColor: Colors.transparent,
+              openColor: AppColors.searchBarBackground,
+              middleColor: AppColors.searchBarBackground,
+              transitionDuration: const Duration(milliseconds: 500),
+              closedBuilder: (context, openContainer) {
+                return GestureDetector(
+                  onTap: openContainer,
+                  child: _QuickActionCard(
+                    icon: action.icon,
+                    title: action.title,
+                    subtitle: action.subtitle,
+                    isFeatured: isSelected,
+                  ),
+                );
+              },
+            );
+          }
+
           return GestureDetector(
             onTap: () => _onCardTap(index),
             child: AnimatedContainer(

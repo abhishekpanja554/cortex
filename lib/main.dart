@@ -1,5 +1,6 @@
+import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/core/constants/string_constants.dart';
-import 'package:cortex/features/app_core/presentation/screens/splash_screen.dart';
+import 'package:cortex/core/navigation/router.dart';
 import 'package:cortex/features/security/presentation/screens/lock_screen.dart';
 import 'package:flutter/material.dart';
 
@@ -20,19 +21,24 @@ void main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
+
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+
+    return MaterialApp.router(
       title: AppStrings.appTitle,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+        scaffoldBackgroundColor: AppColors.searchBarBackground,
+        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.searchBarBackground),
       ),
+      routerConfig: router,
       builder: (context, child) {
         return LockScreen(child: child!);
       },
-      home: const SplashScreen(),
     );
   }
 }

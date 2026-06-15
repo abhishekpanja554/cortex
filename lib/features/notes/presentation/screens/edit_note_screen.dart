@@ -10,6 +10,7 @@ import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hugeicons/hugeicons.dart';
 import 'package:image_picker/image_picker.dart';
 
 class EditNoteScreen extends ConsumerStatefulWidget {
@@ -297,45 +298,48 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Hero(
-      tag: widget.noteId != null ? 'note_${widget.noteId}' : UniqueKey(),
-      child: Scaffold(
-        backgroundColor: AppColors.backgroundScaffold,
-        floatingActionButton: Padding(
-          padding: const EdgeInsets.only(bottom: 100),
-          child: FloatingActionButton.extended(
-            heroTag: null,
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                backgroundColor: Colors.transparent,
-                builder: (ctx) => _buildSpeedDialMenu(),
-              );
-            },
-            icon: const Icon(Icons.add),
-            label: const Text("Block"),
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
+    return Scaffold(
+      backgroundColor: AppColors.searchBarBackground,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 100),
+        child: FloatingActionButton.extended(
+          heroTag: null,
+          onPressed: () {
+            showModalBottomSheet(
+              context: context,
+              backgroundColor: Colors.transparent,
+              builder: (ctx) => _buildSpeedDialMenu(),
+            );
+          },
+          icon: const Center(
+            child: HugeIcon(
+              icon: HugeIcons.strokeRoundedCheckmarkSquare01,
+              color: Colors.white,
+              size: 24,
+            ),
           ),
+          label: const Text("Check box"),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
         ),
-        body: SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(child: _buildTopBar()),
+      ),
+      body: SafeArea(
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(child: _buildTopBar()),
 
-              SliverToBoxAdapter(child: _buildTitleInput()),
+            SliverToBoxAdapter(child: _buildTitleInput()),
 
-              SliverToBoxAdapter(child: _buildContentInput()),
+            SliverToBoxAdapter(child: _buildContentInput()),
 
-              SliverToBoxAdapter(child: _buildActionChips()),
+            SliverToBoxAdapter(child: _buildActionChips()),
 
-              SliverToBoxAdapter(child: _buildAiAssistHeader()),
+            SliverToBoxAdapter(child: _buildAiAssistHeader()),
 
-              SliverToBoxAdapter(child: _buildAiGrid()),
+            SliverToBoxAdapter(child: _buildAiGrid()),
 
-              const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
-            ],
-          ),
+            const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+          ],
         ),
       ),
     );
@@ -395,10 +399,10 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
                 color: Colors.white,
                 border: Border.all(color: AppColors.borderColor, width: 1),
               ),
-              child: const Icon(
-                Icons.chevron_left_rounded,
+              child:  HugeIcon(
+                icon: HugeIcons.strokeRoundedArrowLeft01,
                 color: AppColors.textPrimary,
-                size: 24,
+                size: 15,
               ),
             ),
           ),
@@ -422,7 +426,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
                 border: Border.all(color: AppColors.borderColor, width: 1),
               ),
               child: const Icon(
-                Icons.save_alt_rounded,
+                Icons.check,
                 color: AppColors.textPrimary,
                 size: 20,
               ),
@@ -726,7 +730,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
               ),
               maxLines: null,
               decoration: const InputDecoration(
-                hintText: "To-do",
+                hintText: 'To-do',
                 hintStyle: TextStyle(color: Colors.black38),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.zero,

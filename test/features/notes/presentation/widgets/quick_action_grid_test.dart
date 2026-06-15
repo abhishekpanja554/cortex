@@ -3,17 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('QuickActionGrid renders properly and handles tap on Text Note', (WidgetTester tester) async {
-    bool wasTapped = false;
-
+  testWidgets('QuickActionGrid renders properly', (WidgetTester tester) async {
     await tester.pumpWidget(
-      MaterialApp(
+      const MaterialApp(
         home: Scaffold(
-          body: QuickActionGrid(
-            onTextNoteTap: () {
-              wasTapped = true;
-            },
-          ),
+          body: QuickActionGrid(),
         ),
       ),
     );
@@ -24,15 +18,13 @@ void main() {
     expect(find.text('Image Note'), findsOneWidget);
     expect(find.text('AI Note'), findsOneWidget);
 
-    // Tap the Text Note card
-    // The "Text Note" card is the first item in the grid
+    /// Tap the Text Note card to ensure it doesn't crash
+    /// Since it uses OpenContainer, it will trigger an internal transition
     final textNoteCard = find.text('Text Note');
     await tester.tap(textNoteCard);
     
-    // Pump animation frames
-    await tester.pumpAndSettle();
-
-    // Verify callback was triggered
-    expect(wasTapped, isTrue);
+    /// Pump frames to ensure no exceptions during transition start
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
   });
 }

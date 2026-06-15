@@ -2,7 +2,6 @@ import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/core/constants/text_styles.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
-import 'package:cortex/features/notes/presentation/screens/edit_note_screen.dart';
 import 'package:cortex/features/notes/presentation/widgets/note_list_card.dart';
 import 'package:cortex/features/notes/presentation/widgets/profile_header.dart';
 import 'package:cortex/features/notes/presentation/widgets/quick_action_grid.dart';
@@ -19,18 +18,6 @@ class NotesListScreen extends ConsumerStatefulWidget {
 
 class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   String _searchQuery = '';
-
-  void _navigateToCreateNote() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const EditNoteScreen()));
-  }
-
-  void _navigateToEditNote(String noteId) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => EditNoteScreen(noteId: noteId)));
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +53,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             elevation: 0,
             scrolledUnderElevation: 4,
             shadowColor: Colors.black.withValues(alpha: 0.2),
-            backgroundColor: AppColors.backgroundScaffold,
+            backgroundColor: Color(0xFFF6FAFE),
             surfaceTintColor: Colors.transparent,
             automaticallyImplyLeading: false,
             titleSpacing: 0,
@@ -80,8 +67,8 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             ),
           ),
 
-          SliverToBoxAdapter(
-            child: QuickActionGrid(onTextNoteTap: _navigateToCreateNote),
+          const SliverToBoxAdapter(
+            child: QuickActionGrid(),
           ),
 
           // "Recent Notes" section title
@@ -137,7 +124,6 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                 child: NoteListCard(
                   note: note,
                   searchQuery: _searchQuery,
-                  onTap: () => _navigateToEditNote(note.id),
                 ),
               );
             },

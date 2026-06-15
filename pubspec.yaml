@@ -23,6 +23,7 @@ dependencies:
   local_auth_android: ^2.0.8
   flutter_secure_storage: ^10.2.0
   encrypt: ^5.0.3
+  animations: ^2.0.11
   
 
 dev_dependencies:
@@ -34,6 +35,12 @@ dev_dependencies:
   json_serializable: ^6.13.1
   isar_community_generator: ^3.3.2
   mocktail: ^1.0.5
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/app_logo.png"
 
 flutter:
   uses-material-design: true
