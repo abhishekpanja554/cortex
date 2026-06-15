@@ -1,4 +1,3 @@
-import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/core/constants/text_styles.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
