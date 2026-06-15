@@ -41,8 +41,9 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       final query = _searchQuery.toLowerCase();
       if (note.title.toLowerCase().contains(query)) return true;
       if (note.content.toLowerCase().contains(query)) return true;
-      if (note.blocks.any((b) => b.data.toLowerCase().contains(query)))
+      if (note.blocks.any((b) => b.data.toLowerCase().contains(query))) {
         return true;
+      }
       return false;
     }).toList();
 

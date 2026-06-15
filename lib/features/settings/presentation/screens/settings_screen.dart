@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/features/notes/domain/entities/note.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
+import 'package:cortex/features/security/presentation/widgets/pin_setup_dialog.dart';
 import 'package:cortex/features/security/services/security_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +21,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final SecurityService _securityService = SecurityService();
   bool _isPrivateModeEnabled = false;
   bool _isLoading = true;
+  bool _hasAppPin = false;
 
   @override
   void initState() {
@@ -29,22 +31,59 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final isEnabled = await _securityService.isPrivateModeEnabled;
+    final hasPin = await _securityService.hasAppPin;
     setState(() {
       _isPrivateModeEnabled = isEnabled;
+      _hasAppPin = hasPin;
       _isLoading = false;
     });
   }
 
   Future<void> _togglePrivateMode(bool value) async {
     if (value) {
-      final authSuccess = await _securityService.authenticate();
-      if (!authSuccess) return;
+      final isDeviceSecurityAvailable =
+          await _securityService.isDeviceSecurityAvailable;
+
+      if (isDeviceSecurityAvailable) {
+        final authSuccess = await _securityService.authenticate();
+        if (!authSuccess) return;
+      }
+
+      /// If no device security, or even if there is, we might want to ensure they have a PIN
+      if (mounted && !(_hasAppPin)) {
+        final pin = await showDialog<String>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const PinSetupDialog(),
+        );
+
+        if (pin == null) return;
+        await _securityService.setAppPin(pin);
+        setState(() => _hasAppPin = true);
+      }
     }
 
     await _securityService.setPrivateMode(value);
     setState(() {
       _isPrivateModeEnabled = value;
     });
+  }
+
+  Future<void> _changePin() async {
+    final pin = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const PinSetupDialog(),
+    );
+
+    if (pin != null) {
+      await _securityService.setAppPin(pin);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("App PIN updated")));
+      }
+    }
   }
 
   Future<void> _exportData() async {
@@ -60,8 +99,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 'data': () {
                   if (b is TextBlock) return b.data;
                   if (b is ImageBlock) return b.data;
-                  if (b is CheckboxBlock)
+                  if (b is CheckboxBlock) {
                     return {'text': b.data, 'isChecked': b.isChecked};
+                  }
                   return '';
                 }(),
                 'orderIndex': b.orderIndex,
@@ -125,13 +165,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
                 subtitle: const Text(
-                  "Encrypt notes and require FaceID to unlock",
+                  "Encrypt notes and require authentication to unlock",
                   style: TextStyle(color: Colors.grey),
                 ),
                 value: _isPrivateModeEnabled,
                 onChanged: _togglePrivateMode,
-                activeColor: AppColors.primary,
+                activeTrackColor: AppColors.primary,
               ),
+              if (_isPrivateModeEnabled)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    "Change App PIN",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
+                  trailing: const Icon(Icons.chevron_right, size: 20),
+                  onTap: _changePin,
+                ),
               const Divider(height: 40),
             ],
 

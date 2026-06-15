@@ -137,10 +137,12 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     final title = _titleController.text.trim();
 
     final updatedBlocks = _blocks.map((b) {
-      if (b is TextBlock)
+      if (b is TextBlock) {
         return b.copyWith(data: _controllers[b.id]?.text ?? '');
-      if (b is CheckboxBlock)
+      }
+      if (b is CheckboxBlock) {
         return b.copyWith(data: _controllers[b.id]?.text ?? '');
+      }
       return b;
     }).toList();
 
@@ -174,10 +176,12 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     final title = _titleController.text.trim();
 
     final updatedBlocks = _blocks.map((b) {
-      if (b is TextBlock)
+      if (b is TextBlock) {
         return b.copyWith(data: _controllers[b.id]?.text ?? '');
-      if (b is CheckboxBlock)
+      }
+      if (b is CheckboxBlock) {
         return b.copyWith(data: _controllers[b.id]?.text ?? '');
+      }
       return b;
     }).toList();
 
@@ -520,12 +524,13 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
   void _reindexBlocks() {
     for (int i = 0; i < _blocks.length; i++) {
       final b = _blocks[i];
-      if (b is TextBlock)
+      if (b is TextBlock) {
         _blocks[i] = b.copyWith(orderIndex: i);
-      else if (b is ImageBlock)
+      } else if (b is ImageBlock) {
         _blocks[i] = b.copyWith(orderIndex: i);
-      else if (b is CheckboxBlock)
+      } else if (b is CheckboxBlock) {
         _blocks[i] = b.copyWith(orderIndex: i);
+      }
     }
   }
 

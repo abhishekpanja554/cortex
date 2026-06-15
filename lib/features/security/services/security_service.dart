@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:encrypt/encrypt.dart' as encrypt;
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:local_auth_android/local_auth_android.dart';
 
 class SecurityService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -9,9 +11,34 @@ class SecurityService {
 
   static const _encryptionKeyKey = 'cortex_encryption_key';
   static const _isPrivateModeKey = 'cortex_private_mode_enabled';
+  static const _appPinKey = 'cortex_app_pin';
+
+  static const MethodChannel _securityChannel = MethodChannel(
+    'com.example.cortex/security',
+  );
 
   bool? _cachedIsPrivateMode;
   encrypt.Key? _cachedKey;
+
+  Future<bool> get hasAppPin async {
+    final pin = await _storage.read(key: _appPinKey);
+    return pin != null && pin.isNotEmpty;
+  }
+
+  Future<void> setAppPin(String pin) async {
+    await _storage.write(key: _appPinKey, value: pin);
+  }
+
+  Future<bool> verifyAppPin(String pin) async {
+    final storedPin = await _storage.read(key: _appPinKey);
+    return storedPin == pin;
+  }
+
+  Future<bool> get isDeviceSecurityAvailable async {
+    final canAuthenticateWithBiometrics = await _auth.canCheckBiometrics;
+    final isSupported = await _auth.isDeviceSupported();
+    return canAuthenticateWithBiometrics || isSupported;
+  }
 
   Future<bool> get isPrivateModeEnabled async {
     if (_cachedIsPrivateMode != null) return _cachedIsPrivateMode!;
@@ -29,6 +56,22 @@ class SecurityService {
     if (enabled) {
       await _getOrCreateKey();
     }
+    await _setNativeSafeMode(enabled);
+  }
+
+  Future<void> _setNativeSafeMode(bool enabled) async {
+    try {
+      await _securityChannel.invokeMethod('setSafeMode', enabled);
+    } on PlatformException catch (_) {
+      /// Ignore if not supported on this platform
+    }
+  }
+
+  /// Ensures the native privacy flag (e.g. FLAG_SECURE) matches the current setting.
+  /// Should be called on app startup/resume.
+  Future<void> syncPrivacyState() async {
+    final enabled = await isPrivateModeEnabled;
+    await _setNativeSafeMode(enabled);
   }
 
   Future<encrypt.Key> _getOrCreateKey() async {
@@ -87,14 +130,20 @@ class SecurityService {
         canAuthenticateWithBiometrics || await _auth.isDeviceSupported();
 
     if (!canAuthenticate) {
-      return true; // fail open if no biometics setup (TODO: maybe prompt for PIN instead??)
+      return true; // fail open if no biometics setup
     }
 
     try {
       return await _auth.authenticate(
         localizedReason: 'Pls authenticate to access Cortex',
-        persistAcrossBackgrounding: true,
+        authMessages: const [
+          AndroidAuthMessages(
+            signInTitle: 'Biometric authentication required',
+            signInHint: 'Verify identity',
+          ),
+        ],
         biometricOnly: false,
+        persistAcrossBackgrounding: true,
       );
     } catch (e) {
       return false;

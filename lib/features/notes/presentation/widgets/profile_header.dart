@@ -33,10 +33,6 @@ class ProfileHeader extends StatelessWidget {
               ],
             ),
           ),
-
-          _buildIconButton(Icons.settings_outlined),
-          const SizedBox(width: 8),
-
           _buildIconButton(Icons.notifications_none_rounded),
         ],
       ),

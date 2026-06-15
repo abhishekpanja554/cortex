@@ -20,6 +20,7 @@ dependencies:
   isar_community_flutter_libs: ^3.3.2
   image_picker: ^1.2.2
   local_auth: ^3.0.1
+  local_auth_android: ^2.0.8
   flutter_secure_storage: ^10.2.0
   encrypt: ^5.0.3
   
