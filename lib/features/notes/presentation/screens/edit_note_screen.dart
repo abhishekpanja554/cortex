@@ -399,7 +399,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
                 color: Colors.white,
                 border: Border.all(color: AppColors.borderColor, width: 1),
               ),
-              child:  HugeIcon(
+              child: HugeIcon(
                 icon: HugeIcons.strokeRoundedArrowLeft01,
                 color: AppColors.textPrimary,
                 size: 15,
@@ -551,6 +551,16 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
   }
 
   void _insertCheckboxBlock() {
+    int insertIndex = _blocks.length;
+    for (int i = 0; i < _blocks.length; i++) {
+      final b = _blocks[i];
+      if ((b is TextBlock || b is CheckboxBlock) &&
+          _focusNodes[b.id]?.hasFocus == true) {
+        insertIndex = i + 1;
+        break;
+      }
+    }
+
     final newId = DateTime.now().millisecondsSinceEpoch.toString();
     final newBlock = Block.checkbox(
       id: newId,
@@ -558,7 +568,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       orderIndex: _blocks.length,
     );
     setState(() {
-      _blocks.add(newBlock);
+      _blocks.insert(insertIndex, newBlock);
       _controllers[newId] = TextEditingController()
         ..addListener(_onTextChanged);
       _focusNodes[newId] = FocusNode();
@@ -570,6 +580,16 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
   }
 
   void _insertTextBlock() {
+    int insertIndex = _blocks.length;
+    for (int i = 0; i < _blocks.length; i++) {
+      final b = _blocks[i];
+      if ((b is TextBlock || b is CheckboxBlock) &&
+          _focusNodes[b.id]?.hasFocus == true) {
+        insertIndex = i + 1;
+        break;
+      }
+    }
+
     final newId = DateTime.now().millisecondsSinceEpoch.toString();
     final newBlock = Block.text(
       id: newId,
@@ -577,7 +597,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       orderIndex: _blocks.length,
     );
     setState(() {
-      _blocks.add(newBlock);
+      _blocks.insert(insertIndex, newBlock);
       _controllers[newId] = TextEditingController()
         ..addListener(_onTextChanged);
       _focusNodes[newId] = FocusNode();
@@ -626,7 +646,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
                 return Container(
                   key: ValueKey(block.id),
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: _buildBlockWidget(block),
+                  child: _buildBlockWidget(block, index),
                 );
               },
             ),
@@ -636,20 +656,23 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     );
   }
 
-  Widget _buildBlockWidget(Block block) {
-    if (block is ImageBlock) return _buildImageBlock(block);
-    if (block is TextBlock) return _buildTextBlock(block);
-    if (block is CheckboxBlock) return _buildCheckboxBlock(block);
+  Widget _buildBlockWidget(Block block, int index) {
+    if (block is ImageBlock) return _buildImageBlock(block, index);
+    if (block is TextBlock) return _buildTextBlock(block, index);
+    if (block is CheckboxBlock) return _buildCheckboxBlock(block, index);
     return const SizedBox();
   }
 
-  Widget _buildTextBlock(TextBlock block) {
+  Widget _buildTextBlock(TextBlock block, int index) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 8.0, right: 8.0),
-          child: Icon(Icons.drag_indicator, size: 16, color: Colors.black26),
+        ReorderableDragStartListener(
+          index: index,
+          child: const Padding(
+            padding: EdgeInsets.only(top: 8.0, right: 8.0),
+            child: Icon(Icons.drag_indicator, size: 16, color: Colors.black26),
+          ),
         ),
         Expanded(
           child: Focus(
@@ -681,13 +704,16 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     );
   }
 
-  Widget _buildCheckboxBlock(CheckboxBlock block) {
+  Widget _buildCheckboxBlock(CheckboxBlock block, int index) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 8.0, right: 8.0),
-          child: Icon(Icons.drag_indicator, size: 16, color: Colors.black26),
+        ReorderableDragStartListener(
+          index: index,
+          child: const Padding(
+            padding: EdgeInsets.only(top: 8.0, right: 8.0),
+            child: Icon(Icons.drag_indicator, size: 16, color: Colors.black26),
+          ),
         ),
         GestureDetector(
           onTap: () {
@@ -743,45 +769,63 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     );
   }
 
-  Widget _buildImageBlock(ImageBlock block) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Stack(
-        alignment: Alignment.topRight,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.file(File(block.data), fit: BoxFit.cover),
+  Widget _buildImageBlock(ImageBlock block, int index) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ReorderableDragStartListener(
+          index: index,
+          child: const Padding(
+            padding: EdgeInsets.only(top: 16.0, right: 8.0),
+            child: Icon(Icons.drag_indicator, size: 16, color: Colors.black26),
           ),
-          Positioned(
-            top: 8,
-            right: 8,
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _blocks.remove(block);
-                  if (_coverImage == block.data) {
-                    final nextImage = _blocks
-                        .whereType<ImageBlock>()
-                        .firstOrNull;
-                    _coverImage = nextImage?.data;
-                  }
-                  _mergeAdjacentTextBlocks();
-                });
-                _onTextChanged();
-              },
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.black54,
-                  shape: BoxShape.circle,
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Stack(
+              alignment: Alignment.topRight,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.file(File(block.data), fit: BoxFit.cover),
                 ),
-                padding: const EdgeInsets.all(4),
-                child: const Icon(Icons.close, color: Colors.white, size: 20),
-              ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _blocks.remove(block);
+                        if (_coverImage == block.data) {
+                          final nextImage = _blocks
+                              .whereType<ImageBlock>()
+                              .firstOrNull;
+                          _coverImage = nextImage?.data;
+                        }
+                        _mergeAdjacentTextBlocks();
+                      });
+                      _onTextChanged();
+                    },
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      padding: const EdgeInsets.all(4),
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
