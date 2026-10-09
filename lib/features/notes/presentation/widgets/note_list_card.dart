@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:animations/animations.dart';
 import 'package:cortex/core/constants/colors.dart';

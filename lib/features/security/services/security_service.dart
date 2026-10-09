@@ -4,8 +4,10 @@ import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
 
 class SecurityService {
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final FlutterSecureStorage _storage;
   final LocalAuthentication _auth = LocalAuthentication();
+
+  SecurityService(this._storage);
 
   static const _isPrivateModeKey = 'cortex_private_mode_enabled';
   static const _appPinKey = 'cortex_app_pin';

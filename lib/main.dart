@@ -9,17 +9,41 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cortex/features/auth/presentation/auth_notifier.dart';
+import 'package:cortex/features/auth/domain/auth_state.dart';
+import 'package:cortex/features/auth/data/token_storage.dart';
+import 'package:cortex/core/providers/core_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  const secureStorage = FlutterSecureStorage();
+  const secureStorage = FlutterSecureStorage(
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
+  
+  final prefs = await SharedPreferences.getInstance();
+  final tokenStorage = TokenStorage(secureStorage, prefs);
+  
+  await tokenStorage.wipeIfFirstRun();
+
   final keyStore = DatabaseKeyStore(secureStorage);
   final hexKey = await keyStore.getOrCreateKey();
   final appDatabase = AppDatabase(openEncryptedConnection(hexKey));
+  final docsDir = await getApplicationDocumentsDirectory();
+
+  final initialTokens = await tokenStorage.read();
+  final initialState = initialAuthStateFrom(initialTokens);
 
   runApp(
     ProviderScope(
-      overrides: [appDatabaseProvider.overrideWithValue(appDatabase)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(appDatabase),
+        secureStorageProvider.overrideWithValue(secureStorage),
+        tokenStorageProvider.overrideWithValue(tokenStorage),
+        documentsDirectoryProvider.overrideWithValue(docsDir),
+        initialAuthStateProvider.overrideWithValue(initialState),
+      ],
       child: const MyApp(),
     ),
   );

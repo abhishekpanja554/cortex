@@ -5,8 +5,10 @@ import 'package:cortex/features/notes/presentation/notifiers/note_notifier.dart'
 import 'package:cortex/features/notes/presentation/state/notes_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:cortex/core/providers/core_providers.dart';
+
 final noteRepositoryProvider = Provider<NoteRepository>((ref) {
-  return DriftNoteRepository(ref.watch(appDatabaseProvider));
+  return DriftNoteRepository(ref.watch(appDatabaseProvider), ref.watch(documentsDirectoryProvider));
 });
 
 final noteNotifierProvider = NotifierProvider<NoteNotifier, NotesState>(

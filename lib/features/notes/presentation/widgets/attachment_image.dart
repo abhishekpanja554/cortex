@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cortex/core/providers/core_providers.dart';
 
-class AttachmentImage extends StatelessWidget {
+class AttachmentImage extends ConsumerWidget {
   final String path;
   final BoxFit fit;
 
@@ -12,24 +13,19 @@ class AttachmentImage extends StatelessWidget {
     this.fit = BoxFit.cover,
   });
 
-  Future<File> _resolvePath() async {
-    if (path.startsWith('attachments/')) {
-      final dir = await getApplicationDocumentsDirectory();
-      return File('${dir.path}/$path');
-    }
-    return File(path);
-  }
-
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<File>(
-      future: _resolvePath(),
-      builder: (context, snapshot) {
-        if (snapshot.hasData) {
-          return Image.file(snapshot.data!, fit: fit);
-        }
-        return const SizedBox.shrink();
-      },
+  Widget build(BuildContext context, WidgetRef ref) {
+    File file;
+    if (path.startsWith('attachments/')) {
+      final dir = ref.watch(documentsDirectoryProvider);
+      file = File('${dir.path}/$path');
+    } else {
+      file = File(path);
+    }
+    return Image.file(
+      file, 
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
     );
   }
 }

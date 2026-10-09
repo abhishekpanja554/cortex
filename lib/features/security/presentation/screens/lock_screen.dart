@@ -4,6 +4,7 @@ import 'package:cortex/features/security/presentation/widgets/pin_pad.dart';
 import 'package:cortex/features/security/services/security_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cortex/core/providers/core_providers.dart';
 
 class LockScreen extends ConsumerStatefulWidget {
   final Widget child;
@@ -18,7 +19,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
     with WidgetsBindingObserver {
   bool _isAuthenticated = false;
   bool _isAuthenticating = false;
-  final SecurityService _securityService = SecurityService();
+  SecurityService get _securityService => ref.read(securityServiceProvider);
   bool _isPrivateModeEnabled = false;
   bool _isDeviceSecurityAvailable = false;
   bool _showPinPad = false;

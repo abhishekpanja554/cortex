@@ -7,6 +7,7 @@ import 'package:cortex/features/security/presentation/widgets/pin_setup_dialog.d
 import 'package:cortex/features/security/services/security_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cortex/core/providers/core_providers.dart';
 import 'package:path_provider/path_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -17,7 +18,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  final SecurityService _securityService = SecurityService();
+  SecurityService get _securityService => ref.read(securityServiceProvider);
   bool _isPrivateModeEnabled = false;
   bool _isLoading = true;
   bool _hasAppPin = false;

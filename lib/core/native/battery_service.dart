@@ -11,6 +11,8 @@ class BatteryService {
       return result;
     } on PlatformException catch (_) {
       return 100;
+    } on MissingPluginException catch (_) {
+      return 100;
     }
   }
 }

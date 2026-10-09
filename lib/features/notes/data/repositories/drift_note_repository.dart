@@ -1,11 +1,13 @@
+import 'dart:io';
 import 'package:cortex/core/database/app_database.dart';
 import 'package:cortex/features/notes/domain/entities/note_entity.dart';
 import 'package:cortex/features/notes/domain/repositories/note_repository.dart';
 import 'package:drift/drift.dart';
 
 class DriftNoteRepository implements NoteRepository {
-  DriftNoteRepository(this._db);
+  DriftNoteRepository(this._db, this._docsDir);
   final AppDatabase _db;
+  final Directory _docsDir;
 
   @override
   Future<void> saveNote(NoteEntity note) {
@@ -25,6 +27,7 @@ class DriftNoteRepository implements NoteRepository {
                 updatedAt: DateTime.now().toUtc(),
                 isDirty: true,
                 localRevision: 1,
+                conflictField: note.conflictField,
               ),
             );
         return;
@@ -42,6 +45,7 @@ class DriftNoteRepository implements NoteRepository {
           updatedAt: Value(DateTime.now().toUtc()),
           isDirty: const Value(true),
           localRevision: Value(res.localRevision + 1),
+          conflictField: Value(note.conflictField),
         ),
       );
     });
@@ -90,5 +94,24 @@ class DriftNoteRepository implements NoteRepository {
         ),
       );
     });
+  }
+
+  @override
+  Future<void> wipeAll() async {
+    await _db.delete(_db.notes).go();
+    final attachmentsDir = Directory('${_docsDir.path}/attachments');
+    if (await attachmentsDir.exists()) {
+      await attachmentsDir.delete(recursive: true);
+    }
+  }
+
+  @override
+  Future<int> unsyncedCount() async {
+    final countExp = _db.notes.id.count();
+    final query = _db.selectOnly(_db.notes)
+      ..addColumns([countExp])
+      ..where(_db.notes.isDirty.equals(true));
+    final result = await query.getSingle();
+    return result.read(countExp) ?? 0;
   }
 }
