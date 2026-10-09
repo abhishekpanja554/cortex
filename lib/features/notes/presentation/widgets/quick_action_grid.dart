@@ -13,7 +13,7 @@ class QuickActionGrid extends StatefulWidget {
 }
 
 class _QuickActionGridState extends State<QuickActionGrid> {
-  int _selectedIndex = 1; // voice note selected by defualt cause its used most
+  int _selectedIndex = 1;
 
   static const _actions = [
     (
@@ -171,7 +171,6 @@ class _QuickActionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // icon container - kinda like frosted glass effect
           AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutCubic,
@@ -183,9 +182,7 @@ class _QuickActionCard extends StatelessWidget {
                   : Colors.white.withValues(alpha: 0.55),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Colors.white.withValues(
-                  alpha: isFeatured ? 0.25 : 0.70,
-                ),
+                color: Colors.white.withValues(alpha: isFeatured ? 0.25 : 0.70),
                 width: 0.8,
               ),
             ),
@@ -209,11 +206,7 @@ class _QuickActionCard extends StatelessWidget {
             style: isFeatured
                 ? TextStyles.quickActionSubtitleWhite
                 : TextStyles.quickActionSubtitle,
-            child: Text(
-              subtitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
           ),
         ],
       ),

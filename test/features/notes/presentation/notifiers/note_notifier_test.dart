@@ -1,27 +1,25 @@
 import 'dart:async';
-import 'package:cortex/features/notes/data/repositories/note_repository.dart';
-import 'package:cortex/features/notes/domain/entities/note.dart';
+import 'package:cortex/features/notes/domain/entities/note_entity.dart';
+import 'package:cortex/features/notes/domain/repositories/note_repository.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-class MockNoteRepository extends Mock implements IsarNoteRepository {}
+class MockNoteRepository extends Mock implements NoteRepository {}
 
-class FakeNote extends Fake implements Note {}
+class FakeNoteEntity extends Fake implements NoteEntity {}
 
 void main() {
   late MockNoteRepository mockRepository;
   late ProviderContainer container;
 
   setUpAll(() {
-    registerFallbackValue(FakeNote());
+    registerFallbackValue(FakeNoteEntity());
   });
 
   setUp(() {
     mockRepository = MockNoteRepository();
-
-    // Set up the default stream behavior for the mock
     when(
       () => mockRepository.watchAllNotes(),
     ).thenAnswer((_) => Stream.value([]));
@@ -42,55 +40,46 @@ void main() {
   });
 
   test('state updates when repository stream emits new notes', () async {
-    final controller = StreamController<List<Note>>();
+    final controller = StreamController<List<NoteEntity>>();
 
     when(
       () => mockRepository.watchAllNotes(),
     ).thenAnswer((_) => controller.stream);
 
-    final note = Note(
+    final note = NoteEntity(
       id: '1',
       title: 'Test Note',
-      content: 'Test Content',
-      createdAt: DateTime.now(),
+      body: 'Test Content',
+      createdAt: DateTime.now().toUtc(),
+      updatedAt: DateTime.now().toUtc(),
     );
-
-    // Watch the provider to trigger build()
     container.listen(noteNotifierProvider, (_, __) {});
-
-    // Emitting notes
     controller.add([note]);
-
-    // Wait for stream to process
     await Future.delayed(Duration.zero);
 
     final state = container.read(noteNotifierProvider);
     expect(state.notes.length, 1);
-    expect(state.notes.first.title, 'Test Note');
+    expect(state.notes.first.note.title, 'Test Note');
 
     await controller.close();
   });
 
   test('addNote calls saveNote on repository', () {
-    final note = Note(
+    final note = NoteEntity(
       id: '2',
       title: 'New Note',
-      content: 'New Content',
-      createdAt: DateTime.now(),
+      body: 'New Content',
+      createdAt: DateTime.now().toUtc(),
+      updatedAt: DateTime.now().toUtc(),
     );
-
     when(() => mockRepository.saveNote(any())).thenAnswer((_) async {});
-
     container.read(noteNotifierProvider.notifier).addNote(note);
-
     verify(() => mockRepository.saveNote(note)).called(1);
   });
 
   test('deleteNote calls deleteNote on repository', () {
     when(() => mockRepository.deleteNote(any())).thenAnswer((_) async {});
-
     container.read(noteNotifierProvider.notifier).deleteNote('2');
-
     verify(() => mockRepository.deleteNote('2')).called(1);
   });
 }

@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cortex/core/constants/colors.dart';
-import 'package:cortex/features/notes/domain/entities/note.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:cortex/features/security/presentation/widgets/pin_setup_dialog.dart';
 import 'package:cortex/features/security/services/security_service.dart';
@@ -49,7 +48,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         if (!authSuccess) return;
       }
 
-      /// If no device security, or even if there is, we might want to ensure they have a PIN
       if (mounted && !(_hasAppPin)) {
         final pin = await showDialog<String>(
           context: context,
@@ -91,31 +89,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final notesState = ref.read(noteNotifierProvider);
       final List<Map<String, dynamic>> dump = [];
 
-      for (final note in notesState.notes) {
-        final blocksData = note.blocks
-            .map(
-              (b) => {
-                'id': b.id,
-                'data': () {
-                  if (b is TextBlock) return b.data;
-                  if (b is ImageBlock) return b.data;
-                  if (b is CheckboxBlock) {
-                    return {'text': b.data, 'isChecked': b.isChecked};
-                  }
-                  return '';
-                }(),
-                'orderIndex': b.orderIndex,
-              },
-            )
-            .toList();
-
+      for (final preview in notesState.notes) {
+        final note = preview.note;
         dump.add({
           'id': note.id,
           'title': note.title,
-          'content': note.content,
-          'blocks': blocksData,
+          'body': note.body,
           'createdAt': note.createdAt.toIso8601String(),
-          'updatedAt': note.updatedAt?.toIso8601String(),
+          'updatedAt': note.updatedAt.toIso8601String(),
         });
       }
 

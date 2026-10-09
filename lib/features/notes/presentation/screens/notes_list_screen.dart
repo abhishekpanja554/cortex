@@ -22,23 +22,20 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   Widget build(BuildContext context) {
     final notesState = ref.watch(noteNotifierProvider);
 
-    final filteredNotes = notesState.notes.where((note) {
+    final filteredNotes = notesState.notes.where((preview) {
       if (_searchQuery.isEmpty) return true;
       final query = _searchQuery.toLowerCase();
-      if (note.title.toLowerCase().contains(query)) return true;
-      if (note.content.toLowerCase().contains(query)) return true;
-      if (note.blocks.any((b) => b.data.toLowerCase().contains(query))) {
+      if (preview.note.title.toLowerCase().contains(query)) return true;
+      if (preview.plainText.toLowerCase().contains(query)) return true;
+      if (preview.blocks.any((b) => b.data.toLowerCase().contains(query))) {
         return true;
       }
       return false;
     }).toList();
 
-    // Sort notes: most recently updated or created first
     final sortedNotes = List.of(filteredNotes)
       ..sort((a, b) {
-        final aDate = a.updatedAt ?? a.createdAt;
-        final bDate = b.updatedAt ?? b.createdAt;
-        return bDate.compareTo(aDate);
+        return b.note.updatedAt.compareTo(a.note.updatedAt);
       });
 
     return SafeArea(
@@ -66,11 +63,8 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             ),
           ),
 
-          const SliverToBoxAdapter(
-            child: QuickActionGrid(),
-          ),
+          const SliverToBoxAdapter(child: QuickActionGrid()),
 
-          // "Recent Notes" section title
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
@@ -84,7 +78,8 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
           SliverList.builder(
             itemCount: sortedNotes.length,
             itemBuilder: (context, index) {
-              final note = sortedNotes[index];
+              final preview = sortedNotes[index];
+              final note = preview.note;
               return Dismissible(
                 key: ValueKey(note.id),
                 direction: DismissDirection.endToStart,
@@ -121,7 +116,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                   );
                 },
                 child: NoteListCard(
-                  note: note,
+                  preview: preview,
                   searchQuery: _searchQuery,
                 ),
               );

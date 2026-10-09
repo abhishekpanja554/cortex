@@ -5,13 +5,17 @@ import 'dart:ui';
 import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/core/constants/text_styles.dart';
-import 'package:cortex/features/notes/domain/entities/note.dart';
+import 'package:cortex/features/notes/domain/entities/note_entity.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
+import 'package:cortex/features/notes/domain/note_body_codec.dart';
+import 'package:cortex/features/notes/presentation/widgets/attachment_image.dart';
+import 'package:path_provider/path_provider.dart';
 
 class EditNoteScreen extends ConsumerStatefulWidget {
   final String? noteId;
@@ -39,42 +43,37 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     if (_isEditing) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final note = ref
-            .read(noteNotifierProvider)
-            .notes
-            .firstWhere(
-              (n) => n.id == widget.noteId,
-              orElse: () => Note(
-                id: '',
-                title: '',
-                content: '',
-                createdAt: DateTime.now(),
-              ),
-            );
-        _titleController.text = note.title;
-        _coverImage = note.coverImage;
+            .read(noteNotifierProvider.notifier)
+            .getNoteById(widget.noteId!);
+        if (note != null) {
+          _titleController.text = note.title;
 
-        if (note.blocks.isNotEmpty) {
-          for (final b in note.blocks) {
-            _blocks.add(b);
-            if (b is TextBlock || b is CheckboxBlock) {
-              _controllers[b.id] = TextEditingController(text: b.data)
-                ..addListener(_onTextChanged);
-              _focusNodes[b.id] = FocusNode();
+          final parsed = const NoteBodyCodec().parse(note.body);
+          _coverImage = parsed.whereType<ImageBlock>().firstOrNull?.data;
+
+          if (parsed.isNotEmpty) {
+            for (final b in parsed) {
+              _blocks.add(b);
+              if (b is TextBlock || b is CheckboxBlock) {
+                _controllers[b.id] = TextEditingController(text: b.data)
+                  ..addListener(_onTextChanged);
+                _focusNodes[b.id] = FocusNode();
+              }
             }
+            _mergeAdjacentTextBlocks();
+          } else {
+            final id = const Uuid().v4();
+            _blocks.add(Block.text(id: id, data: ''));
+            _controllers[id] = TextEditingController()
+              ..addListener(_onTextChanged);
+            _focusNodes[id] = FocusNode();
           }
-          _mergeAdjacentTextBlocks();
-        } else {
-          final id = DateTime.now().millisecondsSinceEpoch.toString();
-          _blocks.add(Block.text(id: id, data: note.content, orderIndex: 0));
-          _controllers[id] = TextEditingController(text: note.content)
-            ..addListener(_onTextChanged);
-          _focusNodes[id] = FocusNode();
+          setState(() {});
         }
-        setState(() {});
       });
     } else {
-      final id = DateTime.now().millisecondsSinceEpoch.toString();
-      _blocks.add(Block.text(id: id, data: '', orderIndex: 0));
+      final id = const Uuid().v4();
+      _blocks.add(Block.text(id: id, data: ''));
       _controllers[id] = TextEditingController()..addListener(_onTextChanged);
       _focusNodes[id] = FocusNode();
     }
@@ -127,7 +126,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
   }
 
   void _onTextChanged() {
-    if (!_isEditing) return; // Only auto-save existing notes
+    if (!_isEditing) return;
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () {
       _autoSaveNote();
@@ -147,25 +146,20 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       return b;
     }).toList();
 
-    final content = updatedBlocks
-        .whereType<TextBlock>()
-        .map((b) => b.data)
-        .join('\n')
-        .trim();
+    final body = const NoteBodyCodec().serialize(updatedBlocks);
 
     try {
-      final existing = ref
+      final existingPreview = ref
           .read(noteNotifierProvider)
           .notes
-          .firstWhere((n) => n.id == widget.noteId);
+          .firstWhere((n) => n.note.id == widget.noteId);
+      final existingNote = existingPreview.note;
       ref
           .read(noteNotifierProvider.notifier)
           .updateNote(
-            existing.copyWith(
+            existingNote.copyWith(
               title: title,
-              content: content,
-              blocks: updatedBlocks,
-              coverImage: _coverImage,
+              body: body,
               updatedAt: DateTime.now(),
             ),
           );
@@ -186,14 +180,15 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       return b;
     }).toList();
 
-    final content = updatedBlocks
+    final body = const NoteBodyCodec().serialize(updatedBlocks);
+    final plainText = updatedBlocks
         .whereType<TextBlock>()
         .map((b) => b.data)
         .join('\n')
         .trim();
     final hasImages = updatedBlocks.any((b) => b is ImageBlock);
 
-    if (title.isEmpty && content.isEmpty && !hasImages) {
+    if (title.isEmpty && plainText.isEmpty && !hasImages) {
       Navigator.of(context).pop();
       return;
     }
@@ -201,16 +196,16 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     if (_isEditing) {
       _autoSaveNote();
     } else {
+      final now = DateTime.now();
       ref
           .read(noteNotifierProvider.notifier)
           .addNote(
-            Note(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
+            NoteEntity(
+              id: Uuid().v4(),
               title: title,
-              content: content,
-              blocks: updatedBlocks,
-              coverImage: _coverImage,
-              createdAt: DateTime.now(),
+              body: body,
+              createdAt: now,
+              updatedAt: now,
             ),
           );
     }
@@ -223,8 +218,19 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     final xfile = await picker.pickImage(source: ImageSource.gallery);
 
     if (xfile != null) {
+      final docDir = await getApplicationDocumentsDirectory();
+      final attachDir = Directory('${docDir.path}/attachments');
+      if (!await attachDir.exists()) {
+        await attachDir.create(recursive: true);
+      }
+      final uuid = const Uuid().v4();
+      final newImage = File('${attachDir.path}/$uuid.jpg');
+      await File(xfile.path).copy(newImage.path);
+
+      final relativePath = 'attachments/$uuid.jpg';
+
       setState(() {
-        _coverImage ??= xfile.path;
+        _coverImage ??= relativePath;
 
         int focusedIndex = -1;
         int cursorPosition = -1;
@@ -251,20 +257,16 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
 
           _controllers[b.id]?.text = textBefore;
 
-          final imageId = DateTime.now().millisecondsSinceEpoch.toString();
+          final imageId = const Uuid().v4();
           _blocks.insert(
             focusedIndex + 1,
-            Block.image(
-              id: imageId,
-              data: xfile.path,
-              orderIndex: _blocks.length,
-            ),
+            Block.image(id: imageId, data: relativePath),
           );
 
-          final textId = (DateTime.now().millisecondsSinceEpoch + 1).toString();
+          final textId = const Uuid().v4();
           _blocks.insert(
             focusedIndex + 2,
-            Block.text(id: textId, data: textAfter, orderIndex: _blocks.length),
+            Block.text(id: textId, data: textAfter),
           );
           _controllers[textId] = TextEditingController(text: textAfter)
             ..addListener(_onTextChanged);
@@ -272,19 +274,10 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
 
           _focusNodes[textId]?.requestFocus();
         } else {
-          final imageId = DateTime.now().millisecondsSinceEpoch.toString();
-          _blocks.add(
-            Block.image(
-              id: imageId,
-              data: xfile.path,
-              orderIndex: _blocks.length,
-            ),
-          );
+          _blocks.add(Block.image(id: const Uuid().v4(), data: relativePath));
 
-          final textId = (DateTime.now().millisecondsSinceEpoch + 1).toString();
-          _blocks.add(
-            Block.text(id: textId, data: '', orderIndex: _blocks.length),
-          );
+          final textId = const Uuid().v4();
+          _blocks.add(Block.text(id: textId, data: ''));
           _controllers[textId] = TextEditingController()
             ..addListener(_onTextChanged);
           _focusNodes[textId] = FocusNode();
@@ -504,12 +497,8 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
 
     _controllers[blockId]?.text = textBefore;
 
-    final newId = DateTime.now().millisecondsSinceEpoch.toString();
-    final newBlock = Block.text(
-      id: newId,
-      data: textAfter,
-      orderIndex: index + 1,
-    );
+    final newId = const Uuid().v4();
+    final newBlock = Block.text(id: newId, data: textAfter);
 
     setState(() {
       _blocks.insert(index + 1, newBlock);
@@ -525,18 +514,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     _onTextChanged();
   }
 
-  void _reindexBlocks() {
-    for (int i = 0; i < _blocks.length; i++) {
-      final b = _blocks[i];
-      if (b is TextBlock) {
-        _blocks[i] = b.copyWith(orderIndex: i);
-      } else if (b is ImageBlock) {
-        _blocks[i] = b.copyWith(orderIndex: i);
-      } else if (b is CheckboxBlock) {
-        _blocks[i] = b.copyWith(orderIndex: i);
-      }
-    }
-  }
+  void _reindexBlocks() {}
 
   void _onReorder(int oldIndex, int newIndex) {
     setState(() {
@@ -561,12 +539,8 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       }
     }
 
-    final newId = DateTime.now().millisecondsSinceEpoch.toString();
-    final newBlock = Block.checkbox(
-      id: newId,
-      data: '',
-      orderIndex: _blocks.length,
-    );
+    final newId = const Uuid().v4();
+    final newBlock = Block.checkbox(id: newId, data: '');
     setState(() {
       _blocks.insert(insertIndex, newBlock);
       _controllers[newId] = TextEditingController()
@@ -590,12 +564,8 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       }
     }
 
-    final newId = DateTime.now().millisecondsSinceEpoch.toString();
-    final newBlock = Block.text(
-      id: newId,
-      data: '',
-      orderIndex: _blocks.length,
-    );
+    final newId = const Uuid().v4();
+    final newBlock = Block.text(id: newId, data: '');
     setState(() {
       _blocks.insert(insertIndex, newBlock);
       _controllers[newId] = TextEditingController()
@@ -788,7 +758,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.file(File(block.data), fit: BoxFit.cover),
+                  child: AttachmentImage(path: block.data),
                 ),
                 Positioned(
                   top: 8,

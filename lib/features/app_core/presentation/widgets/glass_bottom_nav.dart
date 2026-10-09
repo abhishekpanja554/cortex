@@ -21,7 +21,10 @@ class GlassBottomNav extends StatelessWidget {
     const double horizontalPadding = 5.0;
     const double verticalPadding = 5.0;
     const double borderWidth = 2.0;
-    final double navWidth = (itemWidth * _icons.length) + (horizontalPadding * 2) + (borderWidth * 2);
+    final double navWidth =
+        (itemWidth * _icons.length) +
+        (horizontalPadding * 2) +
+        (borderWidth * 2);
 
     return Align(
       alignment: Alignment.bottomCenter,

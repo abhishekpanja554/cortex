@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class TextStyles {
-  // --- Header ---
   static TextStyle userNameStyle = GoogleFonts.roboto(
     fontSize: 16,
     fontWeight: FontWeight.w700,
@@ -16,14 +15,12 @@ class TextStyles {
     color: AppColors.textSecondary,
   );
 
-  // --- Search ---
   static TextStyle searchHintStyle = GoogleFonts.roboto(
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: AppColors.iconLight,
   );
 
-  // --- Quick Action Cards ---
   static TextStyle quickActionTitle = GoogleFonts.roboto(
     fontSize: 14,
     fontWeight: FontWeight.w600,
@@ -48,14 +45,12 @@ class TextStyles {
     color: Colors.white.withValues(alpha: 0.85),
   );
 
-  // --- Section Headers ---
   static TextStyle sectionHeaderStyle = GoogleFonts.roboto(
     fontSize: 20,
     fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
   );
 
-  // --- Note Card ---
   static TextStyle noteTitleStyle = GoogleFonts.roboto(
     fontSize: 17,
     fontWeight: FontWeight.w600,
@@ -86,14 +81,12 @@ class TextStyles {
     color: AppColors.textSecondary,
   );
 
-  // --- FAB ---
   static TextStyle fabTextStyle = GoogleFonts.roboto(
     fontSize: 24,
     fontWeight: FontWeight.w500,
     color: Colors.white,
   );
 
-  // --- Edit Note Screen ---
   static TextStyle screenTitleStyle = GoogleFonts.roboto(
     fontSize: 20,
     fontWeight: FontWeight.w700,

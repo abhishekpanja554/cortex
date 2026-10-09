@@ -1,12 +1,14 @@
 import 'dart:async';
 
+import 'package:cortex/features/notes/domain/note_body_codec.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/notes_state.dart';
-import '../../../notes/domain/entities/note.dart';
+import '../../domain/entities/note_entity.dart';
 
 class NoteNotifier extends Notifier<NotesState> {
-  StreamSubscription<List<Note>>? _subscription;
+  StreamSubscription<List<NoteEntity>>? _subscription;
+  static const _codec = NoteBodyCodec();
 
   @override
   NotesState build() {
@@ -20,22 +22,40 @@ class NoteNotifier extends Notifier<NotesState> {
   void _initSubscription() {
     final repo = ref.watch(noteRepositoryProvider);
     _subscription?.cancel();
-    _subscription = repo.watchAllNotes().listen((notes) {
-      state = NotesState(notes: notes);
+    _subscription = repo.watchAllNotes().listen((entities) {
+      final previews = entities.map((e) {
+        final blocks = _codec.parse(e.body);
+        final plainText = blocks
+            .whereType<TextBlock>()
+            .map((b) => b.data)
+            .join('\n')
+            .trim();
+        final firstImage = blocks.whereType<ImageBlock>().firstOrNull?.data;
+        final topTodos = blocks.whereType<CheckboxBlock>().take(3).toList();
+
+        return NotePreview(
+          note: e,
+          blocks: blocks,
+          plainText: plainText,
+          firstImagePath: firstImage,
+          topTodos: topTodos,
+        );
+      }).toList();
+      state = NotesState(notes: previews);
     });
   }
 
-  void addNote(Note note) {
+  void addNote(NoteEntity note) {
     ref.read(noteRepositoryProvider).saveNote(note);
   }
 
-  void updateNote(Note updatedNote) {
+  void updateNote(NoteEntity updatedNote) {
     ref.read(noteRepositoryProvider).saveNote(updatedNote);
   }
 
-  Note? getNoteById(String id) {
+  NoteEntity? getNoteById(String id) {
     try {
-      return state.notes.firstWhere((n) => n.id == id);
+      return state.notes.firstWhere((n) => n.note.id == id).note;
     } catch (_) {
       return null;
     }

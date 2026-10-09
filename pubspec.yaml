@@ -4,6 +4,10 @@ publish_to: 'none'
 version: 1.0.0+1
 environment:
   sdk: ^3.9.2
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlite3mc
 dependencies:
   flutter:
     sdk: flutter
@@ -15,15 +19,15 @@ dependencies:
   json_annotation: ^4.9.0
   google_fonts: ^8.0.1
   hugeicons: ^1.1.5
-  path_provider: ^2.1.5
-  isar_community: ^3.3.2
-  isar_community_flutter_libs: ^3.3.2
+  path_provider: ^2.1.6
   image_picker: ^1.2.2
   local_auth: ^3.0.1
   local_auth_android: ^2.0.8
   flutter_secure_storage: ^10.2.0
-  encrypt: ^5.0.3
   animations: ^2.0.11
+  drift: ^2.34.4
+  drift_flutter: ^0.3.1
+  uuid: ^4.6.0
   
 
 dev_dependencies:
@@ -31,9 +35,9 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^5.0.0
   freezed: ^3.2.2
-  build_runner: ^2.13.1
+  drift_dev: ^2.34.0
+  build_runner: ^2.15.1
   json_serializable: ^6.13.1
-  isar_community_generator: ^3.3.2
   mocktail: ^1.0.5
   flutter_launcher_icons: ^0.14.3
 

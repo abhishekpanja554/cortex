@@ -21,7 +21,6 @@ class AppStrings {
 
   static const String recentNotes = 'Recent Notes';
 
-  // Edit / Create Note Screen
   static const String createNote = 'Create Note';
   static const String editNote = 'Edit Note';
   static const String titleHint = 'Note title...';

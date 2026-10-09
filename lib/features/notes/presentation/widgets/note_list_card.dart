@@ -3,23 +3,23 @@ import 'dart:io';
 import 'package:animations/animations.dart';
 import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/core/constants/text_styles.dart';
-import 'package:cortex/features/notes/domain/entities/note.dart';
+import 'package:cortex/features/notes/presentation/state/notes_state.dart';
+import 'package:cortex/features/notes/domain/entities/note_entity.dart';
 import 'package:cortex/features/notes/presentation/screens/edit_note_screen.dart';
+import 'package:cortex/features/notes/presentation/widgets/attachment_image.dart';
 import 'package:flutter/material.dart';
 
 class NoteListCard extends StatelessWidget {
-  final Note note;
+  final NotePreview preview;
   final String searchQuery;
 
-  const NoteListCard({
-    super.key,
-    required this.note,
-    this.searchQuery = '',
-  });
+  const NoteListCard({super.key, required this.preview, this.searchQuery = ''});
 
   @override
   Widget build(BuildContext context) {
-    final todoBlocks = note.blocks.whereType<CheckboxBlock>().take(3).toList();
+    final note = preview.note;
+    final todoBlocks = preview.topTodos;
+    final coverImage = preview.firstImagePath;
 
     return OpenContainer(
       transitionType: ContainerTransitionType.fadeThrough,
@@ -88,16 +88,17 @@ class NoteListCard extends StatelessWidget {
                     ],
                   ),
 
-                  if (note.coverImage != null &&
-                      note.coverImage!.isNotEmpty) ...[
+                  if (coverImage != null && coverImage.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: Image.file(
-                        File(note.coverImage!),
+                      child: SizedBox(
                         width: double.infinity,
                         height: 140,
-                        fit: BoxFit.cover,
+                        child: AttachmentImage(
+                          path: coverImage,
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                   ],
@@ -107,46 +108,31 @@ class NoteListCard extends StatelessWidget {
                     ...todoBlocks.map((block) => _buildTodoItem(block)),
                   ],
 
-                  if (todoBlocks.isEmpty && note.content.isNotEmpty) ...[
+                  if (todoBlocks.isEmpty && preview.plainText.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     _highlightSearchTerm(
-                      note.content,
+                      preview.plainText,
                       TextStyles.noteContentStyle,
                       maxLines: 2,
                     ),
                   ],
 
-                  if (note.tags.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            children: note.tags
-                                .map((tag) => _buildTag(tag))
-                                .toList(),
-                          ),
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.calendar_today_outlined,
-                              size: 14,
-                              color: AppColors.textSecondary,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _formatRelativeDate(note.createdAt),
-                              style: TextStyles.dateStyle,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Icon(
+                        Icons.calendar_today_outlined,
+                        size: 14,
+                        color: AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatRelativeDate(note.createdAt),
+                        style: TextStyles.dateStyle,
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -189,18 +175,6 @@ class NoteListCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildTag(String tag) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.tagBackground,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.tagBorder, width: 0.8),
-      ),
-      child: Text(tag, style: TextStyles.tagStyle),
     );
   }
 

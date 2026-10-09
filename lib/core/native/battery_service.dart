@@ -10,7 +10,6 @@ class BatteryService {
       final int result = await _channel.invokeMethod('getBatteryLevel');
       return result;
     } on PlatformException catch (_) {
-      // Default fallback if unavailable or not on Android
       return 100;
     }
   }

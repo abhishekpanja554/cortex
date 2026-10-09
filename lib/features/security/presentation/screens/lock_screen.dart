@@ -47,7 +47,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
         _isPrivateModeEnabled = isEnabled;
         _isDeviceSecurityAvailable = isDeviceSecurityAvailable;
         if (!isEnabled) {
-          _isAuthenticated = true; // No auth needed
+          _isAuthenticated = true;
         } else if (!isDeviceSecurityAvailable) {
           _showPinPad = true;
         }
@@ -97,10 +97,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
       setState(() {
         _isAuthenticated = success;
         _isAuthenticating = false;
-        if (!success && _isDeviceSecurityAvailable) {
-          // If biometric fails, user might want to use PIN
-          // but we only show PIN if they have one
-        }
+        if (!success && _isDeviceSecurityAvailable) {}
       });
     }
   }

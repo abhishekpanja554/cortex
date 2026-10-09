@@ -32,8 +32,7 @@ class _PinPadState extends State<PinPad> {
       });
       if (_pin.length == _pinLength) {
         widget.onCompleted(_pin);
-        // Clear pin after short delay to allow UI to show full pin dots if needed
-        // but for now we just clear it so next attempt starts fresh
+
         Future.delayed(const Duration(milliseconds: 200), () {
           if (mounted) setState(() => _pin = "");
         });
