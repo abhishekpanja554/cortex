@@ -11,21 +11,21 @@ import '../network/dio_network_client.dart';
 import 'package:cortex/features/auth/network/auth_interceptor.dart';
 import 'package:cortex/features/auth/presentation/auth_notifier.dart';
 
-final bareDioProvider = Provider<Dio>((ref) {
+Dio _createBaseDio() {
   final dio = Dio();
   dio.options.connectTimeout = const Duration(seconds: 10);
   dio.options.receiveTimeout = const Duration(seconds: 10);
   const String baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:8080');
   dio.options.baseUrl = baseUrl;
   return dio;
+}
+
+final bareDioProvider = Provider<Dio>((ref) {
+  return _createBaseDio();
 });
 
 final apiDioProvider = Provider<Dio>((ref) {
-  final dio = Dio();
-  dio.options.connectTimeout = const Duration(seconds: 10);
-  dio.options.receiveTimeout = const Duration(seconds: 10);
-  const String baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:8080');
-  dio.options.baseUrl = baseUrl;
+  final dio = _createBaseDio();
   
   dio.interceptors.add(AuthInterceptor(
     dio: dio,

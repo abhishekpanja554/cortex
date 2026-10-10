@@ -7,7 +7,6 @@ import 'package:cortex/features/auth/data/auth_repository.dart';
 import 'package:cortex/features/auth/data/token_storage.dart';
 import 'package:cortex/features/auth/domain/auth_failure.dart';
 import 'package:cortex/features/auth/network/auth_interceptor.dart';
-import 'dart:convert';
 import 'dart:async';
 
 class MockAuthRepository extends Mock implements AuthRepository {}
@@ -144,16 +143,36 @@ void main() {
     test('4 Refresh throws SessionExpired -> onSessionExpired called, every caller gets an error', () async {
       await storage.write(AuthTokens(accessToken: 'T1', refreshToken: 'R1'));
 
-      when(() => authRepo.refresh()).thenThrow(SessionExpired());
+      final refreshCompleter = Completer<AuthTokens>();
+      when(() => authRepo.refresh()).thenAnswer((_) => refreshCompleter.future);
 
       adapter.handler = (options) async {
         return ResponseBody.fromString('', 401);
       };
 
-      await expectLater(() => apiDio.get('/test'), throwsA(isA<DioException>()));
-      verify(() => authRepo.refresh()).called(1);
-      verify(() => onSessionExpired.call()).called(1);
-      expect(adapter.callCount, 1);
+      final futures = [
+        apiDio.get('/1'),
+        apiDio.get('/2'),
+        apiDio.get('/3'),
+      ];
+
+      await Future.delayed(const Duration(milliseconds: 100));
+      refreshCompleter.completeError(SessionExpired());
+
+      final results = await Future.wait(futures.map((f) async {
+        try {
+          return await f;
+        } catch (e) {
+          return e;
+        }
+      }));
+      for (final res in results) {
+        expect(res, isA<DioException>());
+      }
+      
+      verify(() => authRepo.refresh()).called(3);
+      verify(() => onSessionExpired.call()).called(3); // Called for each waiting interceptor
+      expect(adapter.callCount, 3);
     });
 
     test('5 Refresh throws NetworkUnavailable -> onSessionExpired never called', () async {
@@ -208,6 +227,58 @@ void main() {
       expect(adapter.callCount, 2);
       expect(adapter.receivedHeaders[0], 'Bearer T1');
       expect(adapter.receivedHeaders[1], 'Bearer T2');
+    });
+    test('8 Real AuthRepository with second adapter proves 3 concurrent 401s = 1 network refresh', () async {
+      final realAuthAdapter = FakeAdapter();
+      final realDio = Dio()..httpClientAdapter = realAuthAdapter;
+      final realAuthRepo = AuthRepository(realDio, storage);
+
+      final realApiAdapter = FakeAdapter();
+      final realApiDio = Dio()..httpClientAdapter = realApiAdapter;
+      realApiDio.interceptors.add(AuthInterceptor(
+        dio: realApiDio,
+        storage: storage,
+        authRepo: realAuthRepo,
+        onSessionExpired: onSessionExpired.call,
+      ));
+
+      await storage.write(AuthTokens(accessToken: 'T1', refreshToken: 'R1'));
+
+      // Real auth repo will hit this for refresh
+      realAuthAdapter.handler = (options) async {
+        await Future.delayed(const Duration(milliseconds: 100)); // Simulate network latency
+        return ResponseBody.fromString(
+          '{"status":"SUCCESS","data":{"accessToken":"T2","refreshToken":"R2"}}',
+          200,
+          headers: {Headers.contentTypeHeader: ['application/json']},
+        );
+      };
+
+      // API adapter hits 401 for T1, 200 for T2
+      realApiAdapter.handler = (options) async {
+        if (options.headers['Authorization'] == 'Bearer T1') {
+          return ResponseBody.fromString('', 401);
+        }
+        return ResponseBody.fromString('', 200);
+      };
+
+      final futures = [
+        realApiDio.get('/1'),
+        realApiDio.get('/2'),
+        realApiDio.get('/3'),
+      ];
+
+      final responses = await Future.wait(futures);
+
+      for (final res in responses) {
+        expect(res.statusCode, 200);
+      }
+
+      // 3 API calls (T1) + 3 Retries (T2)
+      expect(realApiAdapter.callCount, 6);
+      
+      // Proves single flight!
+      expect(realAuthAdapter.callCount, 1);
     });
   });
 }

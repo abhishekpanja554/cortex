@@ -61,6 +61,13 @@ class SecurityService {
     } on MissingPluginException catch (_) {}
   }
 
+  Future<void> clearAll() async {
+    await _storage.delete(key: _appPinKey);
+    await _storage.delete(key: _isPrivateModeKey);
+    _cachedIsPrivateMode = null;
+    await _setNativeSafeMode(false);
+  }
+
   Future<void> syncPrivacyState() async {
     final enabled = await isPrivateModeEnabled;
     await _setNativeSafeMode(enabled);

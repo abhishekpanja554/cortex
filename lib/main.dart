@@ -67,7 +67,11 @@ class MyApp extends ConsumerWidget {
       ),
       routerConfig: router,
       builder: (context, child) {
-        return LockScreen(child: child!);
+        final authState = ref.watch(authProvider);
+        if (authState is Authenticated) {
+          return LockScreen(child: child!);
+        }
+        return child!;
       },
     );
   }

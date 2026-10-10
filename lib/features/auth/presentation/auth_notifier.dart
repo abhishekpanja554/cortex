@@ -35,9 +35,11 @@ class AuthNotifier extends Notifier<AuthState> {
   Future<void> _doLogout(LogoutReason reason) async {
     final authRepo = ref.read(authRepositoryProvider);
     final noteRepo = ref.read(noteRepositoryProvider);
+    final securityService = ref.read(securityServiceProvider);
     
     await authRepo.logout();
     await noteRepo.wipeAll();
+    await securityService.clearAll();
     
     state = Unauthenticated(reason);
   }

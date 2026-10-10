@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cortex/core/providers/core_providers.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:cortex/features/auth/presentation/auth_notifier.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -121,6 +122,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _logout() async {
+    final noteRepo = ref.read(noteRepositoryProvider);
+    final count = await noteRepo.unsyncedCount();
+
+    if (count > 0 && mounted) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Unsynced Changes'),
+          content: Text('$count notes haven\'t synced and will be deleted.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Log out and delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+    ref.read(authProvider.notifier).logout();
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -186,6 +215,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: TextStyle(color: Colors.grey),
               ),
               onTap: _exportData,
+            ),
+            const Divider(height: 40),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.logout, color: Colors.red),
+              ),
+              title: const Text(
+                "Log out",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.red),
+              ),
+              onTap: _logout,
             ),
           ],
         ),

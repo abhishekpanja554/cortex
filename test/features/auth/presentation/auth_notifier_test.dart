@@ -13,18 +13,22 @@ import 'package:cortex/core/providers/core_providers.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:cortex/features/auth/data/token_storage.dart';
 import 'dart:io';
+import 'package:cortex/features/security/services/security_service.dart';
 
 class MockAuthRepository extends Mock implements AuthRepository {}
+class MockSecurityService extends Mock implements SecurityService {}
 
 void main() {
   group('AuthNotifier', () {
     late MockAuthRepository authRepo;
+    late MockSecurityService securityService;
     late AppDatabase memoryDb;
     late DriftNoteRepository noteRepo;
     late Directory tempDir;
     
     setUp(() {
       authRepo = MockAuthRepository();
+      securityService = MockSecurityService();
       memoryDb = AppDatabase(NativeDatabase.memory());
       tempDir = Directory.systemTemp.createTempSync('cortex_test_docs');
       noteRepo = DriftNoteRepository(memoryDb, tempDir);
@@ -43,6 +47,7 @@ void main() {
           initialAuthStateProvider.overrideWithValue(initialState),
           authRepositoryProvider.overrideWithValue(authRepo),
           noteRepositoryProvider.overrideWithValue(noteRepo),
+          securityServiceProvider.overrideWithValue(securityService),
         ],
       );
       return container;
@@ -115,10 +120,12 @@ void main() {
       expect(file.existsSync(), isTrue);
 
       when(() => authRepo.logout()).thenAnswer((_) async {});
+      when(() => securityService.clearAll()).thenAnswer((_) async {});
       
       await container.read(authProvider.notifier).logout();
       
       verify(() => authRepo.logout()).called(1);
+      verify(() => securityService.clearAll()).called(1);
       
       final notesCount = await memoryDb.select(memoryDb.notes).get();
       expect(notesCount.length, 0);
@@ -135,6 +142,7 @@ void main() {
       
       // Setup mocked logout with async delay to ensure idempotency check works across awaits
       when(() => authRepo.logout()).thenAnswer((_) async => await Future.delayed(const Duration(milliseconds: 100)));
+      when(() => securityService.clearAll()).thenAnswer((_) async {});
       
       final futures = [
         container.read(authProvider.notifier).onSessionExpired(),
@@ -144,6 +152,7 @@ void main() {
       await Future.wait(futures);
       
       verify(() => authRepo.logout()).called(1);
+      verify(() => securityService.clearAll()).called(1);
       final state = container.read(authProvider);
       expect(state, isA<Unauthenticated>());
       expect((state as Unauthenticated).reason, LogoutReason.sessionExpired);
