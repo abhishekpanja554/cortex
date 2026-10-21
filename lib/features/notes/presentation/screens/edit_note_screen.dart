@@ -15,6 +15,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:cortex/features/notes/domain/note_body_codec.dart';
 import 'package:cortex/features/notes/presentation/widgets/attachment_image.dart';
+import 'package:cortex/features/sync/presentation/sync_orchestrator.dart';
+import 'package:cortex/features/sync/presentation/sync_providers.dart';
 import 'package:path_provider/path_provider.dart';
 
 class EditNoteScreen extends ConsumerStatefulWidget {
@@ -131,6 +133,9 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     _debounce = Timer(const Duration(milliseconds: 500), () {
       _autoSaveNote();
     });
+    if (mounted) {
+      SyncOrchestrator.of(context)?.onLocalEdit();
+    }
   }
 
   void _autoSaveNote() {
@@ -210,6 +215,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
           );
     }
 
+    ref.read(syncSchedulerProvider).requestSync();
     Navigator.of(context).pop();
   }
 

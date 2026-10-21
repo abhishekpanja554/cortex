@@ -5,6 +5,7 @@ import 'package:cortex/core/database/app_database_provider.dart';
 import 'package:cortex/core/database/database_key_store.dart';
 import 'package:cortex/core/navigation/router.dart';
 import 'package:cortex/features/security/presentation/screens/lock_screen.dart';
+import 'package:cortex/features/sync/presentation/sync_orchestrator.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -56,23 +57,26 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
 
-    return MaterialApp.router(
-      title: AppStrings.appTitle,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: AppColors.searchBarBackground,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.searchBarBackground,
+    return SyncOrchestrator(
+      child: MaterialApp.router(
+        title: AppStrings.appTitle,
+        theme: ThemeData(
+          useMaterial3: true,
+          scaffoldBackgroundColor: AppColors.searchBarBackground,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: AppColors.searchBarBackground,
+          ),
         ),
+        routerConfig: router,
+        builder: (context, child) {
+          final authState = ref.watch(authProvider);
+          if (authState is Authenticated) {
+            return LockScreen(child: child!);
+          }
+          return child!;
+        },
       ),
-      routerConfig: router,
-      builder: (context, child) {
-        final authState = ref.watch(authProvider);
-        if (authState is Authenticated) {
-          return LockScreen(child: child!);
-        }
-        return child!;
-      },
     );
   }
 }
+

@@ -25,7 +25,8 @@ class DriftNoteRepository implements NoteRepository {
                 body: note.body,
                 createdAt: note.createdAt.toUtc(),
                 updatedAt: DateTime.now().toUtc(),
-                isDirty: true,
+                titleDirty: true,
+                bodyDirty: true,
                 localRevision: 1,
                 conflictField: note.conflictField,
               ),
@@ -38,12 +39,17 @@ class DriftNoteRepository implements NoteRepository {
       if (res.title == note.title && res.body == note.body) {
         return;
       }
+
+      final isTitleChanged = res.title != note.title;
+      final isBodyChanged = res.body != note.body;
+
       await (_db.update(_db.notes)..where((t) => t.id.equals(note.id))).write(
         NotesCompanion(
           title: Value(note.title),
           body: Value(note.body),
           updatedAt: Value(DateTime.now().toUtc()),
-          isDirty: const Value(true),
+          titleDirty: Value(res.titleDirty || isTitleChanged),
+          bodyDirty: Value(res.bodyDirty || isBodyChanged),
           localRevision: Value(res.localRevision + 1),
           conflictField: Value(note.conflictField),
         ),
@@ -89,7 +95,8 @@ class DriftNoteRepository implements NoteRepository {
         NotesCompanion(
           deletedAt: Value(DateTime.now().toUtc()),
           updatedAt: Value(DateTime.now().toUtc()),
-          isDirty: const Value(true),
+          titleDirty: const Value(true),
+          bodyDirty: const Value(true),
           localRevision: Value(res.localRevision + 1),
         ),
       );
@@ -99,6 +106,7 @@ class DriftNoteRepository implements NoteRepository {
   @override
   Future<void> wipeAll() async {
     await _db.delete(_db.notes).go();
+    await _db.delete(_db.syncState).go();
     final attachmentsDir = Directory('${_docsDir.path}/attachments');
     if (await attachmentsDir.exists()) {
       await attachmentsDir.delete(recursive: true);
@@ -110,7 +118,9 @@ class DriftNoteRepository implements NoteRepository {
     final countExp = _db.notes.id.count();
     final query = _db.selectOnly(_db.notes)
       ..addColumns([countExp])
-      ..where(_db.notes.isDirty.equals(true));
+      ..where(
+        _db.notes.titleDirty.equals(true) | _db.notes.bodyDirty.equals(true),
+      );
     final result = await query.getSingle();
     return result.read(countExp) ?? 0;
   }

@@ -12,7 +12,8 @@ class Notes extends Table {
       dateTime().clientDefault(() => DateTime.now().toUtc())();
   TextColumn get serverTitleUpdatedAt => text().nullable()();
   TextColumn get serverBodyUpdatedAt => text().nullable()();
-  BoolColumn get isDirty => boolean().withDefault(const Constant(false))();
+  BoolColumn get titleDirty => boolean().withDefault(const Constant(false))();
+  BoolColumn get bodyDirty => boolean().withDefault(const Constant(false))();
   IntColumn get localRevision => integer().withDefault(const Constant(0))();
   DateTimeColumn get deletedAt => dateTime().nullable()();
   TextColumn get conflictOf => text().nullable()();
@@ -20,4 +21,12 @@ class Notes extends Table {
 
   @override
   Set<Column> get primaryKey => {id};
+}
+
+class SyncState extends Table {
+  TextColumn get key => text().withDefault(const Constant('singleton'))();
+  TextColumn get nextSince => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {key};
 }
