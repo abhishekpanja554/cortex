@@ -35,6 +35,8 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
   final Map<String, FocusNode> _focusNodes = {};
   String? _coverImage;
   Timer? _debounce;
+  bool _isResolving = false;
+  bool _hasInitializedFromNote = false;
   bool get _isEditing => widget.noteId != null;
 
   @override
@@ -48,35 +50,42 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
             .read(noteNotifierProvider.notifier)
             .getNoteById(widget.noteId!);
         if (note != null) {
-          _titleController.text = note.title;
-
-          final parsed = const NoteBodyCodec().parse(note.body);
-          _coverImage = parsed.whereType<ImageBlock>().firstOrNull?.data;
-
-          if (parsed.isNotEmpty) {
-            for (final b in parsed) {
-              _blocks.add(b);
-              if (b is TextBlock || b is CheckboxBlock) {
-                _controllers[b.id] = TextEditingController(text: b.data)
-                  ..addListener(_onTextChanged);
-                _focusNodes[b.id] = FocusNode();
-              }
-            }
-            _mergeAdjacentTextBlocks();
-          } else {
-            final id = const Uuid().v4();
-            _blocks.add(Block.text(id: id, data: ''));
-            _controllers[id] = TextEditingController()
-              ..addListener(_onTextChanged);
-            _focusNodes[id] = FocusNode();
-          }
-          setState(() {});
+          _initFromNote(note);
+          if (mounted) setState(() {});
         }
       });
     } else {
       final id = const Uuid().v4();
       _blocks.add(Block.text(id: id, data: ''));
       _controllers[id] = TextEditingController()..addListener(_onTextChanged);
+      _focusNodes[id] = FocusNode();
+    }
+  }
+
+  void _initFromNote(NoteEntity note) {
+    if (_hasInitializedFromNote) return;
+    _hasInitializedFromNote = true;
+    _titleController.text = note.title;
+
+    final parsed = const NoteBodyCodec().parse(note.body);
+    _coverImage = parsed.whereType<ImageBlock>().firstOrNull?.data;
+
+    _blocks.clear();
+    if (parsed.isNotEmpty) {
+      for (final b in parsed) {
+        _blocks.add(b);
+        if (b is TextBlock || b is CheckboxBlock) {
+          _controllers[b.id] = TextEditingController(text: b.data)
+            ..addListener(_onTextChanged);
+          _focusNodes[b.id] = FocusNode();
+        }
+      }
+      _mergeAdjacentTextBlocks();
+    } else {
+      final id = const Uuid().v4();
+      _blocks.add(Block.text(id: id, data: ''));
+      _controllers[id] = TextEditingController()
+        ..addListener(_onTextChanged);
       _focusNodes[id] = FocusNode();
     }
   }
@@ -128,7 +137,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
   }
 
   void _onTextChanged() {
-    if (!_isEditing) return;
+    if (_isResolving || !_isEditing) return;
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () {
       _autoSaveNote();
@@ -139,6 +148,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
   }
 
   void _autoSaveNote() {
+    if (_isResolving) return;
     final title = _titleController.text.trim();
 
     final updatedBlocks = _blocks.map((b) {
@@ -172,6 +182,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
   }
 
   void _saveNote() {
+    if (_isResolving) return;
     _debounce?.cancel();
     final title = _titleController.text.trim();
 
@@ -297,6 +308,35 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final noteState =
+        widget.noteId != null ? ref.watch(noteNotifierProvider) : null;
+    final currentNote = widget.noteId != null && noteState != null
+        ? noteState.notes
+            .where((n) => n.note.id == widget.noteId)
+            .firstOrNull
+            ?.note
+        : null;
+    final isConflictCopy = currentNote?.conflictOf != null;
+    final originalNote = isConflictCopy && noteState != null
+        ? noteState.notes
+            .where((n) => n.note.id == currentNote!.conflictOf)
+            .firstOrNull
+            ?.note
+        : null;
+
+    final conflictCopies = widget.noteId != null &&
+            !isConflictCopy &&
+            noteState != null
+        ? noteState.notes
+            .where((n) => n.note.conflictOf == widget.noteId)
+            .map((n) => n.note)
+            .toList()
+        : <NoteEntity>[];
+
+    if (_isEditing && !_hasInitializedFromNote && currentNote != null) {
+      _initFromNote(currentNote);
+    }
+
     return Scaffold(
       backgroundColor: AppColors.searchBarBackground,
       floatingActionButton: Padding(
@@ -325,7 +365,26 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(child: _buildTopBar()),
+            SliverToBoxAdapter(
+              child: _buildTopBar(isConflictCopy: isConflictCopy),
+            ),
+
+            if (isConflictCopy && currentNote != null)
+              SliverToBoxAdapter(
+                child: _buildConflictBanner(
+                  copyNote: currentNote,
+                  originalNote: originalNote,
+                  isViewingCopy: true,
+                ),
+              )
+            else if (conflictCopies.isNotEmpty)
+              SliverToBoxAdapter(
+                child: _buildConflictBanner(
+                  copyNote: conflictCopies.first,
+                  originalNote: currentNote,
+                  isViewingCopy: false,
+                ),
+              ),
 
             SliverToBoxAdapter(child: _buildTitleInput()),
 
@@ -356,7 +415,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
         children: [
           ListTile(
             leading: const Icon(Icons.text_fields, color: AppColors.primary),
-            title: const Text("Text Block"),
+            title: const Text('Text Block'),
             onTap: () {
               Navigator.pop(context);
               _insertTextBlock();
@@ -364,7 +423,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.check_box, color: AppColors.primary),
-            title: const Text("Checklist"),
+            title: const Text('Checklist'),
             onTap: () {
               Navigator.pop(context);
               _insertCheckboxBlock();
@@ -372,7 +431,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.image, color: AppColors.primary),
-            title: const Text("Image"),
+            title: const Text('Image'),
             onTap: () {
               Navigator.pop(context);
               _insertImage();
@@ -383,7 +442,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     );
   }
 
-  Widget _buildTopBar() {
+  Widget _buildTopBar({bool isConflictCopy = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Row(
@@ -408,7 +467,9 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
 
           Expanded(
             child: Text(
-              _isEditing ? AppStrings.editNote : AppStrings.createNote,
+              isConflictCopy
+                  ? 'Conflict Copy'
+                  : (_isEditing ? AppStrings.editNote : AppStrings.createNote),
               style: TextStyles.screenTitleStyle,
               textAlign: TextAlign.center,
             ),
@@ -434,6 +495,725 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildConflictBanner({
+    required NoteEntity copyNote,
+    required NoteEntity? originalNote,
+    required bool isViewingCopy,
+  }) {
+    final conflictField = copyNote.conflictField ?? 'content';
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFB74D), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFFA000).withValues(alpha: 0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFFECB3),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.call_split_rounded,
+                  color: Color(0xFFE65100),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          isViewingCopy ? 'Conflict Copy' : 'Conflict Detected',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFE65100),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE65100),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            conflictField.toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isViewingCopy
+                          ? (originalNote != null
+                              ? 'This duplicate copy was created because $conflictField was edited concurrently.'
+                              : 'Conflict copy of a deleted note.')
+                          : 'A concurrent edit created a duplicate copy of this note.',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: Color(0xFF5D4037),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _showComparisonSheet(
+                  copyNote: copyNote,
+                  originalNote: originalNote,
+                  isViewingCopy: isViewingCopy,
+                ),
+                icon: const Icon(Icons.compare_arrows_rounded, size: 16),
+                label: const Text('Compare'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFE65100),
+                  side: const BorderSide(color: Color(0xFFFFB74D)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  visualDensity: VisualDensity.compact,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _resolveKeepOriginal(
+                  copyNote: copyNote,
+                  isCurrentlyViewingCopy: isViewingCopy,
+                ),
+                icon: const Icon(Icons.close_rounded, size: 16),
+                label: const Text('Keep Original'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF795548),
+                  side: const BorderSide(color: Color(0xFFD7CCC8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  visualDensity: VisualDensity.compact,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => _resolveKeepCopy(
+                  copyNote: copyNote,
+                  originalNote: originalNote,
+                  isCurrentlyViewingCopy: isViewingCopy,
+                ),
+                icon: const Icon(Icons.check_rounded, size: 16),
+                label: const Text('Keep Copy'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE65100),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  visualDensity: VisualDensity.compact,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showComparisonSheet({
+    required NoteEntity copyNote,
+    required NoteEntity? originalNote,
+    required bool isViewingCopy,
+  }) {
+    final conflictField = copyNote.conflictField ?? 'content';
+
+    final String copyTitle;
+    final String copyPlainText;
+    if (isViewingCopy) {
+      final t = _titleController.text.trim();
+      copyTitle = t.isNotEmpty ? t : copyNote.title;
+      final updatedBlocks = _blocks.map((b) {
+        if (b is TextBlock) return b.copyWith(data: _controllers[b.id]?.text ?? '');
+        if (b is CheckboxBlock) return b.copyWith(data: _controllers[b.id]?.text ?? '');
+        return b;
+      }).toList();
+      final text = _blocksToPlainText(updatedBlocks);
+      copyPlainText = text.isNotEmpty
+          ? text
+          : _blocksToPlainText(const NoteBodyCodec().parse(copyNote.body));
+    } else {
+      copyTitle = copyNote.title;
+      copyPlainText = _blocksToPlainText(const NoteBodyCodec().parse(copyNote.body));
+    }
+
+    final String origTitle;
+    final String origPlainText;
+    if (originalNote != null) {
+      if (!isViewingCopy) {
+        origTitle = _titleController.text.trim();
+        final updatedBlocks = _blocks.map((b) {
+          if (b is TextBlock) return b.copyWith(data: _controllers[b.id]?.text ?? '');
+          if (b is CheckboxBlock) return b.copyWith(data: _controllers[b.id]?.text ?? '');
+          return b;
+        }).toList();
+        origPlainText = _blocksToPlainText(updatedBlocks);
+      } else {
+        origTitle = originalNote.title;
+        origPlainText = _blocksToPlainText(const NoteBodyCodec().parse(originalNote.body));
+      }
+    } else {
+      origTitle = '(Original note deleted)';
+      origPlainText = '';
+    }
+
+    final isTitleDifferent = origTitle != copyTitle;
+    final isBodyDifferent = origPlainText != copyPlainText;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (bottomSheetContext) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFFFBFBFB),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 20,
+                    offset: Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.compare_arrows_rounded,
+                          color: Color(0xFFE65100),
+                          size: 24,
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Compare Notes',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Review changes and choose which version to keep.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(bottomSheetContext).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.all(20),
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF3E0),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFFFCC80)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.info_outline_rounded,
+                                  size: 18, color: Color(0xFFE65100)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Conflict detected on: ${conflictField.toUpperCase()}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFE65100),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _buildComparisonCard(
+                          title: 'Original Note',
+                          badge: 'Original',
+                          badgeColor: const Color(0xFF455A64),
+                          icon: Icons.article_outlined,
+                          noteTitle: origTitle,
+                          noteBody: origPlainText,
+                          isTitleDiff: isTitleDifferent,
+                          isBodyDiff: isBodyDifferent,
+                          conflictField: conflictField,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildComparisonCard(
+                          title: 'Conflict Copy',
+                          badge: 'Duplicate Copy',
+                          badgeColor: const Color(0xFFE65100),
+                          icon: Icons.call_split_rounded,
+                          noteTitle: copyTitle,
+                          noteBody: copyPlainText,
+                          isTitleDiff: isTitleDifferent,
+                          isBodyDiff: isBodyDifferent,
+                          conflictField: conflictField,
+                        ),
+                        const SizedBox(height: 80),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 10,
+                          offset: const Offset(0, -4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              Navigator.of(bottomSheetContext).pop();
+                              _resolveKeepOriginal(
+                                copyNote: copyNote,
+                                isCurrentlyViewingCopy: isViewingCopy,
+                              );
+                            },
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: const BorderSide(color: Color(0xFFCFD8DC)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Keep Original',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF37474F),
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Delete copy',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF78909C),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(bottomSheetContext).pop();
+                              _resolveKeepCopy(
+                                copyNote: copyNote,
+                                originalNote: originalNote,
+                                isCurrentlyViewingCopy: isViewingCopy,
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE65100),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Keep Copy',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Overwrite original',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFFFFE0B2),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildComparisonCard({
+    required String title,
+    required String badge,
+    required Color badgeColor,
+    required IconData icon,
+    required String noteTitle,
+    required String noteBody,
+    required bool isTitleDiff,
+    required bool isBodyDiff,
+    required String conflictField,
+  }) {
+    final highlightTitle = isTitleDiff || conflictField == 'title';
+    final highlightBody = isBodyDiff || conflictField == 'body';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: badgeColor.withValues(alpha: 0.3),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: badgeColor.withValues(alpha: 0.08),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: badgeColor),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: badgeColor,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: badgeColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    badge,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'TITLE',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    if (highlightTitle) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFECB3),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'MODIFIED',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFE65100),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  noteTitle.isEmpty ? '(No title)' : noteTitle,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: noteTitle.isEmpty ? Colors.grey : AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Text(
+                      'CONTENT',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    if (highlightBody) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFECB3),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'MODIFIED',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFE65100),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  noteBody.isEmpty ? '(Empty)' : noteBody,
+                  maxLines: 8,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: noteBody.isEmpty ? Colors.grey : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _blocksToPlainText(List<Block> blocks) {
+    return blocks
+        .map((b) {
+          if (b is TextBlock) return b.data;
+          if (b is CheckboxBlock) {
+            return '${b.isChecked ? "[x]" : "[ ]"} ${b.data}';
+          }
+          if (b is ImageBlock) return '[Image: ${b.data}]';
+          return '';
+        })
+        .where((s) => s.isNotEmpty)
+        .join('\n');
+  }
+
+  Future<void> _resolveKeepCopy({
+    required NoteEntity copyNote,
+    required NoteEntity? originalNote,
+    required bool isCurrentlyViewingCopy,
+  }) async {
+    _isResolving = true;
+    _debounce?.cancel();
+
+    final String finalTitle;
+    final String finalBody;
+
+    if (isCurrentlyViewingCopy) {
+      final t = _titleController.text.trim();
+      finalTitle = t.isNotEmpty ? t : copyNote.title;
+      final updatedBlocks = _blocks.map((b) {
+        if (b is TextBlock) {
+          return b.copyWith(data: _controllers[b.id]?.text ?? '');
+        }
+        if (b is CheckboxBlock) {
+          return b.copyWith(data: _controllers[b.id]?.text ?? '');
+        }
+        return b;
+      }).toList();
+      final serialized = const NoteBodyCodec().serialize(updatedBlocks);
+      finalBody = updatedBlocks.isNotEmpty ? serialized : copyNote.body;
+    } else {
+      finalTitle = copyNote.title;
+      finalBody = copyNote.body;
+    }
+
+    if (originalNote != null) {
+      ref.read(noteNotifierProvider.notifier).updateNote(
+        NoteEntity(
+          id: originalNote.id,
+          title: finalTitle,
+          body: finalBody,
+          createdAt: originalNote.createdAt,
+          updatedAt: DateTime.now().toUtc(),
+          conflictOf: null,
+          conflictField: null,
+        ),
+      );
+    }
+
+    ref.read(noteNotifierProvider.notifier).deleteNote(copyNote.id);
+    ref.read(syncSchedulerProvider).requestSync();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kept conflict copy. Original note updated.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      if (isCurrentlyViewingCopy) {
+        Navigator.of(context).pop();
+      } else {
+        setState(() {
+          _isResolving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _resolveKeepOriginal({
+    required NoteEntity copyNote,
+    required bool isCurrentlyViewingCopy,
+  }) async {
+    _isResolving = true;
+    _debounce?.cancel();
+
+    ref.read(noteNotifierProvider.notifier).deleteNote(copyNote.id);
+    ref.read(syncSchedulerProvider).requestSync();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kept original note. Conflict copy discarded.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      if (isCurrentlyViewingCopy) {
+        Navigator.of(context).pop();
+      } else {
+        setState(() {
+          _isResolving = false;
+        });
+      }
+    }
   }
 
   Widget _buildTitleInput() {

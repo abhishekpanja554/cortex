@@ -28,6 +28,7 @@ class DriftNoteRepository implements NoteRepository {
                 titleDirty: true,
                 bodyDirty: true,
                 localRevision: 1,
+                conflictOf: note.conflictOf,
                 conflictField: note.conflictField,
               ),
             );
@@ -36,7 +37,10 @@ class DriftNoteRepository implements NoteRepository {
       if (res.deletedAt != null) {
         return;
       }
-      if (res.title == note.title && res.body == note.body) {
+      if (res.title == note.title &&
+          res.body == note.body &&
+          res.conflictOf == note.conflictOf &&
+          res.conflictField == note.conflictField) {
         return;
       }
 
@@ -51,6 +55,7 @@ class DriftNoteRepository implements NoteRepository {
           titleDirty: Value(res.titleDirty || isTitleChanged),
           bodyDirty: Value(res.bodyDirty || isBodyChanged),
           localRevision: Value(res.localRevision + 1),
+          conflictOf: Value(note.conflictOf),
           conflictField: Value(note.conflictField),
         ),
       );

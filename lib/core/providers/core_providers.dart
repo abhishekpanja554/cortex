@@ -15,7 +15,10 @@ Dio _createBaseDio() {
   final dio = Dio();
   dio.options.connectTimeout = const Duration(seconds: 10);
   dio.options.receiveTimeout = const Duration(seconds: 10);
-  const String baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:8080');
+  const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://192.168.1.38:8080',
+  );
   dio.options.baseUrl = baseUrl;
   return dio;
 }
@@ -26,14 +29,17 @@ final bareDioProvider = Provider<Dio>((ref) {
 
 final apiDioProvider = Provider<Dio>((ref) {
   final dio = _createBaseDio();
-  
-  dio.interceptors.add(AuthInterceptor(
-    dio: dio,
-    storage: ref.watch(tokenStorageProvider),
-    authRepo: ref.watch(authRepositoryProvider),
-    onSessionExpired: () => ref.read(authProvider.notifier).onSessionExpired(),
-  ));
-  
+
+  dio.interceptors.add(
+    AuthInterceptor(
+      dio: dio,
+      storage: ref.watch(tokenStorageProvider),
+      authRepo: ref.watch(authRepositoryProvider),
+      onSessionExpired: () =>
+          ref.read(authProvider.notifier).onSessionExpired(),
+    ),
+  );
+
   return dio;
 });
 
@@ -59,5 +65,8 @@ final documentsDirectoryProvider = Provider<Directory>((ref) {
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return AuthRepository(ref.watch(bareDioProvider), ref.watch(tokenStorageProvider));
+  return AuthRepository(
+    ref.watch(bareDioProvider),
+    ref.watch(tokenStorageProvider),
+  );
 });
