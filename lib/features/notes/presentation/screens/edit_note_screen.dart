@@ -1419,7 +1419,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       );
     }
 
-    ref.read(noteNotifierProvider.notifier).deleteNote(copyNote.id);
+    await ref.read(noteNotifierProvider.notifier).deleteNote(copyNote.id);
     ref.read(syncSchedulerProvider).requestSync();
 
     if (mounted) {
@@ -1448,7 +1448,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     _isResolving = true;
     _debounce?.cancel();
 
-    ref.read(noteNotifierProvider.notifier).deleteNote(copyNote.id);
+    await ref.read(noteNotifierProvider.notifier).deleteNote(copyNote.id);
     ref.read(syncSchedulerProvider).requestSync();
 
     if (mounted) {

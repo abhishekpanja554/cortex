@@ -29,8 +29,11 @@ class FakeSyncEngine extends SyncEngine {
     _blocker = null;
   }
 
+  DateTime? nextEligibleTombstone;
+  int skippedTombstones = 0;
+
   @override
-  Future<void> syncOnce() async {
+  Future<SyncResult> syncOnce() async {
     callCount++;
     if (_blocker != null) {
       await _blocker!.future;
@@ -40,6 +43,10 @@ class FakeSyncEngine extends SyncEngine {
       nextFailure = null;
       throw f;
     }
+    return SyncResult(
+      nextTombstoneEligibleAt: nextEligibleTombstone,
+      skippedTombstones: skippedTombstones,
+    );
   }
 }
 
@@ -203,6 +210,52 @@ void main() {
       // Resume should have triggered a requestSyncOnResume,
       // but since we just synced, it should be skipped.
       expect(fakeSyncEngine.callCount, 1);
+    });
+
+    test('scheduler sets timer when skipped tombstone returns nextEligibleAt',
+        () async {
+      // Simulate syncOnce skipping a tombstone eligible in 100ms
+      fakeSyncEngine.nextEligibleTombstone =
+          DateTime.now().toUtc().add(const Duration(milliseconds: 100));
+      fakeSyncEngine.skippedTombstones = 1;
+
+      scheduler.start();
+      await Future.delayed(const Duration(milliseconds: 30));
+      expect(fakeSyncEngine.callCount, 1);
+
+      // Now clear nextEligibleTombstone so the follow-up doesn't re-arm
+      fakeSyncEngine.nextEligibleTombstone = null;
+      fakeSyncEngine.skippedTombstones = 0;
+
+      // Wait for the tombstone timer to fire (100ms)
+      await Future.delayed(const Duration(milliseconds: 120));
+      expect(fakeSyncEngine.callCount, 2);
+
+      // Verify the log entries recorded the triggers and skipped count
+      final logs = scheduler.recentLogs;
+      expect(logs.length, 2);
+      expect(logs[0].trigger, SyncTrigger.startup);
+      expect(logs[0].skippedTombstones, 1);
+      expect(logs[0].success, isTrue);
+
+      expect(logs[1].trigger, SyncTrigger.undoWindowExpired);
+      expect(logs[1].skippedTombstones, 0);
+      expect(logs[1].success, isTrue);
+    });
+
+    test('recentLogs records trigger, duration, and skipped count on sync failure',
+        () async {
+      fakeSyncEngine.nextFailure =
+          const ServerSyncFailure(statusCode: 500, message: 'Server error');
+
+      scheduler.start();
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      final logs = scheduler.recentLogs;
+      expect(logs.length, 1);
+      expect(logs.first.trigger, SyncTrigger.startup);
+      expect(logs.first.success, isFalse);
+      expect(logs.first.error, isA<ServerSyncFailure>());
     });
   });
 }

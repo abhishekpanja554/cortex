@@ -1,6 +1,50 @@
 import 'dart:async';
+import 'dart:developer' as developer;
+import 'package:clock/clock.dart';
 import 'package:cortex/features/sync/data/sync_engine.dart';
 import 'package:cortex/features/sync/domain/sync_failure.dart';
+
+enum SyncTrigger {
+  startup,
+  manual,
+  noteDeleted,
+  noteRestored,
+  undoWindowExpired,
+  periodic,
+  appResume,
+  networkBack,
+  retry,
+}
+
+class SyncRunLog {
+  final DateTime timestamp;
+  final SyncTrigger trigger;
+  final Duration duration;
+  final int skippedTombstones;
+  final int pushedCount;
+  final int pulledCount;
+  final Object? error;
+  final bool success;
+
+  const SyncRunLog({
+    required this.timestamp,
+    required this.trigger,
+    required this.duration,
+    required this.skippedTombstones,
+    this.pushedCount = 0,
+    this.pulledCount = 0,
+    this.error,
+    this.success = true,
+  });
+
+  @override
+  String toString() {
+    final status = success
+        ? 'SUCCESS (pushed=$pushedCount, pulled=$pulledCount)'
+        : 'FAILED ($error)';
+    return '[SyncRun] trigger=${trigger.name}, skippedTombstones=$skippedTombstones, duration=${duration.inMilliseconds}ms, status=$status';
+  }
+}
 
 // Single sync scheduler. All triggers call requestSync(),
 // and this decides when syncOnce actually executes.
@@ -10,6 +54,7 @@ import 'package:cortex/features/sync/domain/sync_failure.dart';
 // - Multiple requests while running collapse into one follow-up sync.
 // - Exponential backoff on failure (5s -> 5m max).
 // - NetworkUnavailable skips timer retries (waits for network-back trigger).
+// - Owns the undo window: schedules a timer when tombstones are skipped.
 // - Stops everything on logout.
 class SyncScheduler {
   SyncScheduler({required SyncEngine syncEngine}) : _syncEngine = syncEngine;
@@ -18,12 +63,14 @@ class SyncScheduler {
 
   bool _running = false;
   bool _pendingFollowUp = false;
+  SyncTrigger? _pendingTrigger;
   bool _stopped = true;
   bool _networkDown = false;
 
   int _consecutiveFailures = 0;
   Timer? _retryTimer;
   Timer? _periodicTimer;
+  Timer? _tombstoneTimer;
 
   DateTime? _lastSuccessfulSync;
 
@@ -32,6 +79,9 @@ class SyncScheduler {
   final _statusController = StreamController<SyncStatus>.broadcast();
   Stream<SyncStatus> get statusStream => _statusController.stream;
 
+  final _recentLogs = <SyncRunLog>[];
+  List<SyncRunLog> get recentLogs => List.unmodifiable(_recentLogs);
+
   // Lifecycle
 
   void start() {
@@ -39,16 +89,19 @@ class SyncScheduler {
     _consecutiveFailures = 0;
     _networkDown = false;
     _startPeriodicTimer();
-    requestSync();
+    requestSync(SyncTrigger.startup);
   }
 
   void stop() {
     _stopped = true;
     _pendingFollowUp = false;
+    _pendingTrigger = null;
     _retryTimer?.cancel();
     _retryTimer = null;
     _periodicTimer?.cancel();
     _periodicTimer = null;
+    _tombstoneTimer?.cancel();
+    _tombstoneTimer = null;
     _lastSuccessfulSync = null;
     _consecutiveFailures = 0;
     _statusController.add(SyncStatus.idle);
@@ -61,16 +114,17 @@ class SyncScheduler {
 
   // Triggers
 
-  void requestSync() {
+  void requestSync([SyncTrigger trigger = SyncTrigger.manual]) {
     if (_stopped) return;
 
     if (_running) {
-      // 5 requests during a sync = 1 follow-up, not 5
+      // Multiple requests during a sync collapse into 1 follow-up
       _pendingFollowUp = true;
+      _pendingTrigger = trigger;
       return;
     }
 
-    _run();
+    _run(trigger);
   }
 
   void requestSyncOnResume({
@@ -78,10 +132,10 @@ class SyncScheduler {
   }) {
     if (_stopped) return;
     final last = _lastSuccessfulSync;
-    if (last != null && DateTime.now().difference(last) < minInterval) {
+    if (last != null && clock.now().difference(last) < minInterval) {
       return;
     }
-    requestSync();
+    requestSync(SyncTrigger.appResume);
   }
 
   // Network back is just a hint from connectivity_plus
@@ -90,39 +144,118 @@ class SyncScheduler {
     _networkDown = false;
     _retryTimer?.cancel();
     _retryTimer = null;
-    requestSync();
+    requestSync(SyncTrigger.networkBack);
+  }
+
+  void _scheduleTombstoneTimer(DateTime? eligibleAt) {
+    _tombstoneTimer?.cancel();
+    _tombstoneTimer = null;
+
+    if (eligibleAt == null || _stopped) return;
+
+    final now = clock.now().toUtc();
+    final delay = eligibleAt.difference(now);
+    final timerDelay = delay.isNegative ? Duration.zero : delay;
+
+    _tombstoneTimer = Timer(timerDelay, () {
+      if (!_stopped) {
+        requestSync(SyncTrigger.undoWindowExpired);
+      }
+    });
   }
 
   // Internal loop
 
-  Future<void> _run() async {
+  Future<void> _run([SyncTrigger trigger = SyncTrigger.manual]) async {
     if (_stopped || _running) return;
 
     _running = true;
     _pendingFollowUp = false;
+    _pendingTrigger = null;
     _retryTimer?.cancel();
     _retryTimer = null;
     _statusController.add(SyncStatus.syncing);
 
+    final stopwatch = Stopwatch()..start();
     try {
-      await _syncEngine.syncOnce();
+      final result = await _syncEngine.syncOnce();
+      stopwatch.stop();
+
+      _logSyncRun(
+        trigger: trigger,
+        duration: stopwatch.elapsed,
+        skippedTombstones: result.skippedTombstones,
+        pushedCount: result.pushedCount,
+        pulledCount: result.pulledCount,
+        success: true,
+      );
+
+      _scheduleTombstoneTimer(result.nextTombstoneEligibleAt);
       _onSuccess();
     } on SyncFailure catch (e) {
+      stopwatch.stop();
+      _logSyncRun(
+        trigger: trigger,
+        duration: stopwatch.elapsed,
+        skippedTombstones: 0,
+        error: e,
+        success: false,
+      );
       _onFailure(e);
     } catch (e) {
+      stopwatch.stop();
+      _logSyncRun(
+        trigger: trigger,
+        duration: stopwatch.elapsed,
+        skippedTombstones: 0,
+        error: e,
+        success: false,
+      );
       _onFailure(UnknownSyncFailure(e));
     }
+  }
+
+  void _logSyncRun({
+    required SyncTrigger trigger,
+    required Duration duration,
+    required int skippedTombstones,
+    int pushedCount = 0,
+    int pulledCount = 0,
+    Object? error,
+    bool success = true,
+  }) {
+    final entry = SyncRunLog(
+      timestamp: clock.now().toUtc(),
+      trigger: trigger,
+      duration: duration,
+      skippedTombstones: skippedTombstones,
+      pushedCount: pushedCount,
+      pulledCount: pulledCount,
+      error: error,
+      success: success,
+    );
+    _recentLogs.add(entry);
+    if (_recentLogs.length > 100) {
+      _recentLogs.removeAt(0);
+    }
+    developer.log(
+      entry.toString(),
+      name: 'cortex.sync',
+      error: error,
+    );
   }
 
   void _onSuccess() {
     _running = false;
     _consecutiveFailures = 0;
-    _lastSuccessfulSync = DateTime.now();
+    _lastSuccessfulSync = clock.now();
     _statusController.add(SyncStatus.idle);
 
     if (_pendingFollowUp && !_stopped) {
       _pendingFollowUp = false;
-      _run();
+      final nextTrigger = _pendingTrigger ?? SyncTrigger.manual;
+      _pendingTrigger = null;
+      _run(nextTrigger);
     }
   }
 
@@ -141,13 +274,14 @@ class SyncScheduler {
     if (failure is NetworkUnavailableSyncFailure) {
       _networkDown = true;
       _pendingFollowUp = false;
+      _pendingTrigger = null;
       // Interface might be down, or server might be unreachable while Wi-Fi is fine.
       // Keep a slow 5-minute retry so it recovers even without a connectivity change.
       _retryTimer?.cancel();
       _retryTimer = Timer(const Duration(minutes: 5), () {
         if (!_stopped) {
           _networkDown = false;
-          _run();
+          _run(SyncTrigger.retry);
         }
       });
       return;
@@ -158,7 +292,7 @@ class SyncScheduler {
     _retryTimer?.cancel();
     _retryTimer = Timer(delay, () {
       if (!_stopped) {
-        _run();
+        _run(SyncTrigger.retry);
       }
     });
   }

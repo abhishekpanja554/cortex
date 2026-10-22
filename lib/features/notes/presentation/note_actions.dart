@@ -1,7 +1,6 @@
 import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/features/notes/domain/entities/note_entity.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
-import 'package:cortex/features/sync/presentation/sync_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,12 +18,6 @@ class NoteActions {
   }) {
     container.read(noteNotifierProvider.notifier).deleteNote(note.id);
 
-    // Promptly push tombstone once the undo grace period (6s) expires,
-    // if the user does not tap Undo.
-    Future.delayed(const Duration(milliseconds: 6500), () {
-      container.read(syncSchedulerProvider).requestSync();
-    });
-
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -35,7 +28,6 @@ class NoteActions {
             label: AppStrings.undo,
             onPressed: () {
               container.read(noteNotifierProvider.notifier).restoreNote(note.id);
-              container.read(syncSchedulerProvider).requestSync();
             },
           ),
         ),

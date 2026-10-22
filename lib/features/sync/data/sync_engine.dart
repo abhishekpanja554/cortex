@@ -1,6 +1,25 @@
+import 'package:clock/clock.dart';
 import 'package:cortex/features/sync/data/sync_api.dart';
 import 'package:cortex/features/sync/data/sync_local_store.dart';
 import 'package:cortex/features/sync/domain/sync_failure.dart';
+
+class SyncResult {
+  final DateTime? nextTombstoneEligibleAt;
+  final int skippedTombstones;
+  final int pushedCount;
+  final int pulledCount;
+
+  const SyncResult({
+    this.nextTombstoneEligibleAt,
+    this.skippedTombstones = 0,
+    this.pushedCount = 0,
+    this.pulledCount = 0,
+  });
+
+  DateTime? get earliestEligibleAt => nextTombstoneEligibleAt;
+
+  static const empty = SyncResult();
+}
 
 class SyncEngine {
   final SyncApi _api;
@@ -17,7 +36,7 @@ class SyncEngine {
        _store = store,
        _getSession = getSession;
 
-  Future<void> syncOnce() async {
+  Future<SyncResult> syncOnce() async {
     // Snapshot current session so we can bail out if the user logs out mid-sync
     final session = _getSession();
 
@@ -31,9 +50,15 @@ class SyncEngine {
     final dirtyNotes = await _store.getDirtyNotes();
     checkSession();
 
+    DateTime? earliestEligibleAt;
+    int skippedTombstones = 0;
+    int pushedCount = 0;
+    int pulledCount = 0;
+
     if (dirtyNotes.isNotEmpty) {
       final pushList = <Map<String, dynamic>>[];
       final sentContentMap = <String, ({String? title, String? body})>{};
+      final now = clock.now().toUtc();
 
       for (final note in dirtyNotes) {
         final isTombstone =
@@ -41,11 +66,17 @@ class SyncEngine {
 
         if (isTombstone) {
           final deletedAt = note.deletedAt;
-          if (deletedAt != null &&
-              DateTime.now().toUtc().difference(deletedAt).abs() <
-                  undoGracePeriod) {
-            // Skip pushing tombstone if it is still within the undo window
-            continue;
+          if (deletedAt != null) {
+            final eligibleAt = deletedAt.toUtc().add(undoGracePeriod);
+            if (now.isBefore(eligibleAt)) {
+              skippedTombstones++;
+              if (earliestEligibleAt == null ||
+                  eligibleAt.isBefore(earliestEligibleAt)) {
+                earliestEligibleAt = eligibleAt;
+              }
+              // Skip pushing tombstone if it is still within the undo window
+              continue;
+            }
           }
           pushList.add({'id': note.id, 'deleted': true});
           sentContentMap[note.id] = (title: null, body: null);
@@ -73,6 +104,7 @@ class SyncEngine {
       if (pushList.isNotEmpty) {
         final pushResults = await _api.push(pushList);
         checkSession();
+        pushedCount = pushResults.length;
 
         // 2. Apply server push responses (update stamps, clear clean flags)
         for (final res in pushResults) {
@@ -94,6 +126,7 @@ class SyncEngine {
 
     final pullResponse = await _api.pull(since: cursor);
     checkSession();
+    pulledCount = pullResponse.notes.length;
 
     for (final pulledNote in pullResponse.notes) {
       checkSession();
@@ -105,5 +138,12 @@ class SyncEngine {
     if (pullResponse.nextSince != null) {
       await _store.saveCursor(pullResponse.nextSince!);
     }
+
+    return SyncResult(
+      nextTombstoneEligibleAt: earliestEligibleAt,
+      skippedTombstones: skippedTombstones,
+      pushedCount: pushedCount,
+      pulledCount: pulledCount,
+    );
   }
 }

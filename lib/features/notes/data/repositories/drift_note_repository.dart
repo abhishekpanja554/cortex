@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:clock/clock.dart';
 import 'package:cortex/core/database/app_database.dart';
 import 'package:cortex/features/notes/domain/entities/note_entity.dart';
 import 'package:cortex/features/notes/domain/repositories/note_repository.dart';
@@ -24,7 +25,7 @@ class DriftNoteRepository implements NoteRepository {
                 title: note.title,
                 body: note.body,
                 createdAt: note.createdAt.toUtc(),
-                updatedAt: DateTime.now().toUtc(),
+                updatedAt: clock.now().toUtc(),
                 titleDirty: true,
                 bodyDirty: true,
                 localRevision: 1,
@@ -51,7 +52,7 @@ class DriftNoteRepository implements NoteRepository {
         NotesCompanion(
           title: Value(note.title),
           body: Value(note.body),
-          updatedAt: Value(DateTime.now().toUtc()),
+          updatedAt: Value(clock.now().toUtc()),
           titleDirty: Value(res.titleDirty || isTitleChanged),
           bodyDirty: Value(res.bodyDirty || isBodyChanged),
           localRevision: Value(res.localRevision + 1),
@@ -98,8 +99,8 @@ class DriftNoteRepository implements NoteRepository {
       }
       await (_db.update(_db.notes)..where((t) => t.id.equals(id))).write(
         NotesCompanion(
-          deletedAt: Value(DateTime.now().toUtc()),
-          updatedAt: Value(DateTime.now().toUtc()),
+          deletedAt: Value(clock.now().toUtc()),
+          updatedAt: Value(clock.now().toUtc()),
           titleDirty: const Value(true),
           bodyDirty: const Value(true),
           localRevision: Value(res.localRevision + 1),
@@ -120,7 +121,7 @@ class DriftNoteRepository implements NoteRepository {
       await (_db.update(_db.notes)..where((t) => t.id.equals(id))).write(
         NotesCompanion(
           deletedAt: const Value(null),
-          updatedAt: Value(DateTime.now().toUtc()),
+          updatedAt: Value(clock.now().toUtc()),
           titleDirty: const Value(true),
           bodyDirty: const Value(true),
           localRevision: Value(res.localRevision + 1),

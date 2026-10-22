@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:cortex/features/notes/domain/note_body_codec.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
+import 'package:cortex/features/sync/data/sync_scheduler.dart';
+import 'package:cortex/features/sync/presentation/sync_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/notes_state.dart';
 import '../../domain/entities/note_entity.dart';
@@ -61,11 +63,13 @@ class NoteNotifier extends Notifier<NotesState> {
     }
   }
 
-  void deleteNote(String id) {
-    ref.read(noteRepositoryProvider).deleteNote(id);
+  Future<void> deleteNote(String id) async {
+    await ref.read(noteRepositoryProvider).deleteNote(id);
+    ref.read(syncSchedulerProvider).requestSync(SyncTrigger.noteDeleted);
   }
 
-  void restoreNote(String id) {
-    ref.read(noteRepositoryProvider).restoreNote(id);
+  Future<void> restoreNote(String id) async {
+    await ref.read(noteRepositoryProvider).restoreNote(id);
+    ref.read(syncSchedulerProvider).requestSync(SyncTrigger.noteRestored);
   }
 }
