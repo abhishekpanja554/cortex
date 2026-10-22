@@ -279,7 +279,7 @@ void main() {
         () async {
       final now = DateTime.now().toUtc();
 
-      // Case A: locally deleted row pushed to server
+      // Case A: locally deleted row pushed to server (past undo window)
       await db.into(db.notes).insert(
             Note(
               id: '00000000-0000-0000-0000-000000000001',
@@ -287,7 +287,7 @@ void main() {
               body: 'Body',
               createdAt: now,
               updatedAt: now,
-              deletedAt: now,
+              deletedAt: now.subtract(const Duration(seconds: 10)),
               titleDirty: true,
               bodyDirty: true,
               localRevision: 1,
@@ -329,6 +329,42 @@ void main() {
             ..where((t) => t.id.equals('00000000-0000-0000-0000-000000000001')))
           .getSingleOrNull();
       expect(row2, isNull);
+    });
+
+    test('6b. Tombstones younger than undo grace period are skipped during push',
+        () async {
+      final now = DateTime.now().toUtc();
+      await db.into(db.notes).insert(
+            Note(
+              id: '00000000-0000-0000-0000-000000000099',
+              title: 'Just Deleted',
+              body: 'Body',
+              createdAt: now,
+              updatedAt: now,
+              deletedAt: now, // 0s ago, within 6s undo grace period
+              titleDirty: true,
+              bodyDirty: true,
+              localRevision: 1,
+            ),
+          );
+
+      var pushCalled = false;
+      api.onPush = (notes) {
+        pushCalled = true;
+        return [];
+      };
+
+      await engine.syncOnce();
+
+      // Push was skipped for this tombstone
+      expect(pushCalled, isFalse);
+
+      // Local row is still present in database as a tombstone
+      final row = await (db.select(db.notes)
+            ..where((t) => t.id.equals('00000000-0000-0000-0000-000000000099')))
+          .getSingleOrNull();
+      expect(row, isNotNull);
+      expect(row!.deletedAt, isNotNull);
     });
 
     // 7. Pulling identical changes twice produces identical state (idempotence)

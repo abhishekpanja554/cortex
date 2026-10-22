@@ -6,11 +6,13 @@ class SyncEngine {
   final SyncApi _api;
   final SyncLocalStore _store;
   final int Function() _getSession;
+  final Duration undoGracePeriod;
 
   SyncEngine({
     required SyncApi api,
     required SyncLocalStore store,
     required int Function() getSession,
+    this.undoGracePeriod = const Duration(seconds: 6),
   }) : _api = api,
        _store = store,
        _getSession = getSession;
@@ -38,6 +40,13 @@ class SyncEngine {
             note.deletedAt != null && (note.titleDirty || note.bodyDirty);
 
         if (isTombstone) {
+          final deletedAt = note.deletedAt;
+          if (deletedAt != null &&
+              DateTime.now().toUtc().difference(deletedAt).abs() <
+                  undoGracePeriod) {
+            // Skip pushing tombstone if it is still within the undo window
+            continue;
+          }
           pushList.add({'id': note.id, 'deleted': true});
           sentContentMap[note.id] = (title: null, body: null);
         } else {
@@ -61,18 +70,20 @@ class SyncEngine {
         }
       }
 
-      final pushResults = await _api.push(pushList);
-      checkSession();
-
-      // 2. Apply server push responses (update stamps, clear clean flags)
-      for (final res in pushResults) {
+      if (pushList.isNotEmpty) {
+        final pushResults = await _api.push(pushList);
         checkSession();
-        final sent = sentContentMap[res.id];
-        await _store.applyPushResult(
-          res,
-          sentTitle: sent?.title,
-          sentBody: sent?.body,
-        );
+
+        // 2. Apply server push responses (update stamps, clear clean flags)
+        for (final res in pushResults) {
+          checkSession();
+          final sent = sentContentMap[res.id];
+          await _store.applyPushResult(
+            res,
+            sentTitle: sent?.title,
+            sentBody: sent?.body,
+          );
+        }
       }
     }
 

@@ -1,48 +1,82 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:cortex/core/constants/colors.dart';
+import 'package:cortex/core/constants/dimens.dart';
 import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/core/constants/text_styles.dart';
+import 'package:cortex/core/theme/liquid_glass.dart';
+import 'package:cortex/core/utils/date_format.dart';
 import 'package:cortex/features/notes/domain/entities/note_entity.dart';
-import 'package:cortex/features/notes/presentation/providers/providers.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hugeicons/hugeicons.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart';
 import 'package:cortex/features/notes/domain/note_body_codec.dart';
+import 'package:cortex/features/notes/domain/note_template.dart';
+import 'package:cortex/features/notes/presentation/note_actions.dart';
+import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:cortex/features/notes/presentation/widgets/attachment_image.dart';
 import 'package:cortex/features/sync/presentation/sync_orchestrator.dart';
 import 'package:cortex/features/sync/presentation/sync_providers.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
+export 'package:cortex/features/notes/domain/note_template.dart';
+
+/// Block editor for a single note.
+///
+/// Saving model: every change is auto-saved (debounced) — for new notes too —
+/// and flushed when the screen is left by any route (Done, back button, swipe).
+/// A note created here and left completely empty is discarded.
 class EditNoteScreen extends ConsumerStatefulWidget {
   final String? noteId;
+  final NoteTemplate template;
 
-  const EditNoteScreen({super.key, this.noteId});
+  const EditNoteScreen({
+    super.key,
+    this.noteId,
+    this.template = NoteTemplate.text,
+  });
 
   @override
   ConsumerState<EditNoteScreen> createState() => _EditNoteScreenState();
 }
 
 class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
+  static const _codec = NoteBodyCodec();
+  static const _autosaveDelay = Duration(milliseconds: 600);
+
   late final TextEditingController _titleController;
+  final FocusNode _titleFocus = FocusNode();
   final List<Block> _blocks = [];
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, FocusNode> _focusNodes = {};
-  String? _coverImage;
   Timer? _debounce;
+
+  /// True while a conflict resolution is in flight; suppresses auto-save so
+  /// the resolution's own writes are the only ones made.
   bool _isResolving = false;
   bool _hasInitializedFromNote = false;
+  bool _initializing = false;
+  bool _closing = false;
+
+  /// Id of the persisted note; null until a new note gets its first save.
+  String? _noteId;
+  bool _createdHere = false;
+  bool _savedAnything = false;
+  DateTime _createdAt = DateTime.now();
+  String _lastSavedTitle = '';
+  String _lastSavedBody = '';
+
   bool get _isEditing => widget.noteId != null;
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController();
+    _noteId = widget.noteId;
+    _titleController = TextEditingController()..addListener(_onTextChanged);
+    _titleFocus.addListener(_onFocusChanged);
 
     if (_isEditing) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -56,44 +90,59 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       });
     } else {
       final id = const Uuid().v4();
-      _blocks.add(Block.text(id: id, data: ''));
-      _controllers[id] = TextEditingController()..addListener(_onTextChanged);
-      _focusNodes[id] = FocusNode();
+      if (widget.template == NoteTemplate.checklist) {
+        _blocks.add(Block.checkbox(id: id, data: ''));
+      } else {
+        _blocks.add(Block.text(id: id, data: ''));
+      }
+      _registerBlock(id, '');
+      _lastSavedBody = _serialize();
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        switch (widget.template) {
+          case NoteTemplate.text:
+            _titleFocus.requestFocus();
+          case NoteTemplate.checklist:
+            _focusNodes[id]?.requestFocus();
+          case NoteTemplate.image:
+            _insertImage();
+        }
+      });
     }
   }
 
   void _initFromNote(NoteEntity note) {
     if (_hasInitializedFromNote) return;
     _hasInitializedFromNote = true;
+    _initializing = true;
+
+    _createdAt = note.createdAt;
     _titleController.text = note.title;
 
-    final parsed = const NoteBodyCodec().parse(note.body);
-    _coverImage = parsed.whereType<ImageBlock>().firstOrNull?.data;
-
+    final parsed = _codec.parse(note.body);
     _blocks.clear();
     if (parsed.isNotEmpty) {
       for (final b in parsed) {
         _blocks.add(b);
         if (b is TextBlock || b is CheckboxBlock) {
-          _controllers[b.id] = TextEditingController(text: b.data)
-            ..addListener(_onTextChanged);
-          _focusNodes[b.id] = FocusNode();
+          _registerBlock(b.id, b.data);
         }
       }
       _mergeAdjacentTextBlocks();
-    } else {
-      final id = const Uuid().v4();
-      _blocks.add(Block.text(id: id, data: ''));
-      _controllers[id] = TextEditingController()
-        ..addListener(_onTextChanged);
-      _focusNodes[id] = FocusNode();
     }
+    _ensureEditableBlock();
+
+    _lastSavedTitle = _titleController.text.trim();
+    _lastSavedBody = _serialize();
+    _initializing = false;
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
     _titleController.dispose();
+    _titleFocus.dispose();
     for (final c in _controllers.values) {
       c.dispose();
     }
@@ -101,6 +150,54 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       f.dispose();
     }
     super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Block bookkeeping
+  // ---------------------------------------------------------------------------
+
+  void _registerBlock(String id, String text) {
+    _controllers[id] = TextEditingController(text: text)
+      ..addListener(_onTextChanged);
+    _focusNodes[id] = FocusNode()..addListener(_onFocusChanged);
+  }
+
+  void _unregisterBlock(String id) {
+    _controllers.remove(id)?.dispose();
+    _focusNodes.remove(id)?.dispose();
+  }
+
+  /// The editor always needs at least one text-like block to type into.
+  void _ensureEditableBlock() {
+    final hasEditable = _blocks.any((b) => b is TextBlock || b is CheckboxBlock);
+    if (!hasEditable || _blocks.last is ImageBlock) {
+      final id = const Uuid().v4();
+      _blocks.add(Block.text(id: id, data: ''));
+      _registerBlock(id, '');
+    }
+  }
+
+  void _onFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
+  int get _focusedIndex {
+    for (var i = 0; i < _blocks.length; i++) {
+      if (_focusNodes[_blocks[i].id]?.hasFocus == true) return i;
+    }
+    return -1;
+  }
+
+  void _focusBlock(String id, {bool atEnd = true}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final node = _focusNodes[id];
+      if (node == null) return;
+      node.requestFocus();
+      final c = _controllers[id];
+      if (atEnd && c != null) {
+        c.selection = TextSelection.collapsed(offset: c.text.length);
+      }
+    });
   }
 
   void _mergeAdjacentTextBlocks() {
@@ -123,196 +220,367 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
             text2;
 
         _controllers[block1.id]?.text = mergedText;
-
-        _controllers[block2.id]?.dispose();
-        _controllers.remove(block2.id);
-        _focusNodes[block2.id]?.dispose();
-        _focusNodes.remove(block2.id);
-
+        _unregisterBlock(block2.id);
         _blocks.removeAt(i + 1);
-
         i--;
       }
     }
   }
 
-  void _onTextChanged() {
-    if (_isResolving || !_isEditing) return;
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
-      _autoSaveNote();
+  // ---------------------------------------------------------------------------
+  // Saving
+  // ---------------------------------------------------------------------------
+
+  List<Block> _currentBlocks() {
+    return _blocks.map((b) {
+      if (b is TextBlock) {
+        return b.copyWith(data: _controllers[b.id]?.text ?? '');
+      }
+      if (b is CheckboxBlock) {
+        return b.copyWith(data: _controllers[b.id]?.text ?? '');
+      }
+      return b;
+    }).toList();
+  }
+
+  String _serialize() => _codec.serialize(_currentBlocks());
+
+  bool _hasContent(String title, List<Block> blocks) {
+    if (title.isNotEmpty) return true;
+    return blocks.any((b) {
+      if (b is ImageBlock) return true;
+      return b.data.trim().isNotEmpty;
     });
-    if (mounted) {
-      SyncOrchestrator.of(context)?.onLocalEdit();
-    }
   }
 
-  void _autoSaveNote() {
-    if (_isResolving) return;
+  void _onTextChanged() {
+    if (_isResolving || _closing || _initializing || !mounted) return;
     final title = _titleController.text.trim();
+    if (title == _lastSavedTitle && _serialize() == _lastSavedBody) return;
 
-    final updatedBlocks = _blocks.map((b) {
-      if (b is TextBlock) {
-        return b.copyWith(data: _controllers[b.id]?.text ?? '');
-      }
-      if (b is CheckboxBlock) {
-        return b.copyWith(data: _controllers[b.id]?.text ?? '');
-      }
-      return b;
-    }).toList();
-
-    final body = const NoteBodyCodec().serialize(updatedBlocks);
-
-    try {
-      final existingPreview = ref
-          .read(noteNotifierProvider)
-          .notes
-          .firstWhere((n) => n.note.id == widget.noteId);
-      final existingNote = existingPreview.note;
-      ref
-          .read(noteNotifierProvider.notifier)
-          .updateNote(
-            existingNote.copyWith(
-              title: title,
-              body: body,
-              updatedAt: DateTime.now(),
-            ),
-          );
-    } catch (_) {}
-  }
-
-  void _saveNote() {
-    if (_isResolving) return;
     _debounce?.cancel();
-    final title = _titleController.text.trim();
-
-    final updatedBlocks = _blocks.map((b) {
-      if (b is TextBlock) {
-        return b.copyWith(data: _controllers[b.id]?.text ?? '');
-      }
-      if (b is CheckboxBlock) {
-        return b.copyWith(data: _controllers[b.id]?.text ?? '');
-      }
-      return b;
-    }).toList();
-
-    final body = const NoteBodyCodec().serialize(updatedBlocks);
-    final plainText = updatedBlocks
-        .whereType<TextBlock>()
-        .map((b) => b.data)
-        .join('\n')
-        .trim();
-    final hasImages = updatedBlocks.any((b) => b is ImageBlock);
-
-    if (title.isEmpty && plainText.isEmpty && !hasImages) {
-      Navigator.of(context).pop();
-      return;
-    }
-
-    if (_isEditing) {
-      _autoSaveNote();
-    } else {
-      final now = DateTime.now();
-      ref
-          .read(noteNotifierProvider.notifier)
-          .addNote(
-            NoteEntity(
-              id: Uuid().v4(),
-              title: title,
-              body: body,
-              createdAt: now,
-              updatedAt: now,
-            ),
-          );
-    }
-
-    ref.read(syncSchedulerProvider).requestSync();
-    Navigator.of(context).pop();
+    _debounce = Timer(_autosaveDelay, _persist);
   }
+
+  /// Writes the current editor state if it differs from what was last saved.
+  void _persist() {
+    _debounce?.cancel();
+    if (_isResolving || !mounted) return;
+
+    final title = _titleController.text.trim();
+    final blocks = _currentBlocks();
+    final body = _codec.serialize(blocks);
+    if (title == _lastSavedTitle && body == _lastSavedBody) return;
+
+    final notifier = ref.read(noteNotifierProvider.notifier);
+    final now = DateTime.now();
+
+    if (_noteId == null) {
+      if (!_hasContent(title, blocks)) return;
+      final id = const Uuid().v4();
+      notifier.addNote(
+        NoteEntity(
+          id: id,
+          title: title,
+          body: body,
+          createdAt: _createdAt,
+          updatedAt: now,
+        ),
+      );
+      _noteId = id;
+      _createdHere = true;
+    } else {
+      final existing = notifier.getNoteById(_noteId!);
+      notifier.updateNote(
+        existing != null
+            ? existing.copyWith(title: title, body: body, updatedAt: now)
+            : NoteEntity(
+                id: _noteId!,
+                title: title,
+                body: body,
+                createdAt: _createdAt,
+                updatedAt: now,
+              ),
+      );
+    }
+
+    _lastSavedTitle = title;
+    _lastSavedBody = body;
+    _savedAnything = true;
+    SyncOrchestrator.of(context)?.onLocalEdit();
+  }
+
+  /// Runs whenever the route is popped (Done, back button, swipe-back).
+  void _onExit() {
+    if (_isResolving || _closing) return;
+    _closing = true;
+    _persist();
+
+    final notifier = ref.read(noteNotifierProvider.notifier);
+    if (_createdHere &&
+        _noteId != null &&
+        !_hasContent(_titleController.text.trim(), _currentBlocks())) {
+      notifier.deleteNote(_noteId!);
+    }
+    if (_savedAnything) {
+      ref.read(syncSchedulerProvider).requestSync();
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final confirmed = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (sheetContext) => CupertinoActionSheet(
+        message: const Text('You can undo right after deleting.'),
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(sheetContext).pop(true),
+            child: const Text(AppStrings.deleteNote),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(sheetContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    _persist();
+    final note = _noteId == null
+        ? null
+        : ref.read(noteNotifierProvider.notifier).getNoteById(_noteId!);
+    _closing = true;
+    _debounce?.cancel();
+    final messenger = ScaffoldMessenger.of(context);
+    final container = ProviderScope.containerOf(context, listen: false);
+    Navigator.of(context).pop();
+    if (note != null) {
+      NoteActions.deleteWithUndo(
+        container: container,
+        messenger: messenger,
+        note: note,
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Images
+  // ---------------------------------------------------------------------------
 
   Future<void> _insertImage() async {
-    final picker = ImagePicker();
-    final xfile = await picker.pickImage(source: ImageSource.gallery);
-
-    if (xfile != null) {
-      final docDir = await getApplicationDocumentsDirectory();
-      final attachDir = Directory('${docDir.path}/attachments');
-      if (!await attachDir.exists()) {
-        await attachDir.create(recursive: true);
+    XFile? xfile;
+    try {
+      xfile = await ImagePicker().pickImage(source: ImageSource.gallery);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Couldn’t open your photo library.')),
+        );
       }
-      final uuid = const Uuid().v4();
-      final newImage = File('${attachDir.path}/$uuid.jpg');
-      await File(xfile.path).copy(newImage.path);
-
-      final relativePath = 'attachments/$uuid.jpg';
-
-      setState(() {
-        _coverImage ??= relativePath;
-
-        int focusedIndex = -1;
-        int cursorPosition = -1;
-        for (int i = 0; i < _blocks.length; i++) {
-          final b = _blocks[i];
-          if ((b is TextBlock || b is CheckboxBlock) &&
-              _focusNodes[b.id]?.hasFocus == true) {
-            focusedIndex = i;
-            cursorPosition = _controllers[b.id]?.selection.baseOffset ?? -1;
-            break;
-          }
-        }
-
-        if (focusedIndex != -1 && cursorPosition != -1) {
-          final b = _blocks[focusedIndex];
-          final text = _controllers[b.id]?.text ?? '';
-
-          if (cursorPosition < 0 || cursorPosition > text.length) {
-            cursorPosition = text.length;
-          }
-
-          final textBefore = text.substring(0, cursorPosition);
-          final textAfter = text.substring(cursorPosition);
-
-          _controllers[b.id]?.text = textBefore;
-
-          final imageId = const Uuid().v4();
-          _blocks.insert(
-            focusedIndex + 1,
-            Block.image(id: imageId, data: relativePath),
-          );
-
-          final textId = const Uuid().v4();
-          _blocks.insert(
-            focusedIndex + 2,
-            Block.text(id: textId, data: textAfter),
-          );
-          _controllers[textId] = TextEditingController(text: textAfter)
-            ..addListener(_onTextChanged);
-          _focusNodes[textId] = FocusNode();
-
-          _focusNodes[textId]?.requestFocus();
-        } else {
-          _blocks.add(Block.image(id: const Uuid().v4(), data: relativePath));
-
-          final textId = const Uuid().v4();
-          _blocks.add(Block.text(id: textId, data: ''));
-          _controllers[textId] = TextEditingController()
-            ..addListener(_onTextChanged);
-          _focusNodes[textId] = FocusNode();
-
-          _focusNodes[textId]?.requestFocus();
-        }
-      });
-      _onTextChanged();
+      return;
     }
+    if (xfile == null || !mounted) return;
+
+    final docDir = await getApplicationDocumentsDirectory();
+    final attachDir = Directory('${docDir.path}/attachments');
+    if (!await attachDir.exists()) {
+      await attachDir.create(recursive: true);
+    }
+    final uuid = const Uuid().v4();
+    final newImage = File('${attachDir.path}/$uuid.jpg');
+    await File(xfile.path).copy(newImage.path);
+    final relativePath = 'attachments/$uuid.jpg';
+    if (!mounted) return;
+
+    String? focusAfter;
+    setState(() {
+      final focusedIndex = _focusedIndex;
+      final focused = focusedIndex == -1 ? null : _blocks[focusedIndex];
+      final imageBlock = Block.image(id: const Uuid().v4(), data: relativePath);
+
+      if (focused is TextBlock) {
+        // Split the paragraph at the cursor and put the image in between.
+        final controller = _controllers[focused.id]!;
+        final text = controller.text;
+        var cursor = controller.selection.baseOffset;
+        if (cursor < 0 || cursor > text.length) cursor = text.length;
+        final before = text.substring(0, cursor);
+        final after = text.substring(cursor);
+
+        if (before.trim().isEmpty) {
+          // Empty paragraph: image replaces it, text continues below.
+          controller.text = after;
+          _blocks.insert(focusedIndex, imageBlock);
+          focusAfter = focused.id;
+        } else {
+          controller.text = before;
+          _blocks.insert(focusedIndex + 1, imageBlock);
+          final textId = const Uuid().v4();
+          _blocks.insert(focusedIndex + 2, Block.text(id: textId, data: after));
+          _registerBlock(textId, after);
+          focusAfter = textId;
+        }
+      } else if (focused != null) {
+        _blocks.insert(focusedIndex + 1, imageBlock);
+      } else {
+        // Nothing focused: replace a trailing empty paragraph, else append.
+        final last = _blocks.isEmpty ? null : _blocks.last;
+        if (last is TextBlock &&
+            (_controllers[last.id]?.text.trim().isEmpty ?? true)) {
+          _blocks.insert(_blocks.length - 1, imageBlock);
+        } else {
+          _blocks.add(imageBlock);
+        }
+      }
+      _ensureEditableBlock();
+    });
+    if (focusAfter != null) _focusBlock(focusAfter!, atEnd: false);
+    _onTextChanged();
   }
+
+  void _removeImage(ImageBlock block) {
+    setState(() {
+      _blocks.removeWhere((b) => b.id == block.id);
+      _mergeAdjacentTextBlocks();
+      _ensureEditableBlock();
+    });
+    _onTextChanged();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Checklists
+  // ---------------------------------------------------------------------------
+
+  /// Toolbar "Checklist": turns an empty focused paragraph into a checklist
+  /// item, otherwise adds a new item below the cursor's block.
+  void _addChecklistItem() {
+    final index = _focusedIndex;
+    final focused = index == -1 ? null : _blocks[index];
+    final newId = const Uuid().v4();
+
+    setState(() {
+      if (focused is TextBlock &&
+          (_controllers[focused.id]?.text.trim().isEmpty ?? true)) {
+        _blocks[index] = Block.checkbox(id: newId, data: '');
+        _unregisterBlock(focused.id);
+      } else if (focused != null) {
+        _blocks.insert(index + 1, Block.checkbox(id: newId, data: ''));
+      } else {
+        final last = _blocks.isEmpty ? null : _blocks.last;
+        if (last is TextBlock &&
+            (_controllers[last.id]?.text.trim().isEmpty ?? true)) {
+          _blocks[_blocks.length - 1] = Block.checkbox(id: newId, data: '');
+          _unregisterBlock(last.id);
+        } else {
+          _blocks.add(Block.checkbox(id: newId, data: ''));
+        }
+      }
+      _registerBlock(newId, '');
+    });
+    _focusBlock(newId);
+    _onTextChanged();
+  }
+
+  /// Return key on a checklist item: new item below, or — on an empty item —
+  /// leave the list and continue with a normal paragraph.
+  void _onChecklistSubmitted(String blockId) {
+    final index = _blocks.indexWhere((b) => b.id == blockId);
+    if (index == -1) return;
+    final controller = _controllers[blockId]!;
+    final text = controller.text;
+    final newId = const Uuid().v4();
+
+    if (text.trim().isEmpty) {
+      setState(() {
+        _blocks[index] = Block.text(id: newId, data: '');
+        _unregisterBlock(blockId);
+        _registerBlock(newId, '');
+        _mergeAdjacentTextBlocks();
+      });
+      final target = _blocks.any((b) => b.id == newId)
+          ? newId
+          : _blocks[index > 0 ? index - 1 : 0].id;
+      _focusBlock(target);
+    } else {
+      var cursor = controller.selection.baseOffset;
+      if (cursor < 0 || cursor > text.length) cursor = text.length;
+      final before = text.substring(0, cursor);
+      final after = text.substring(cursor);
+      setState(() {
+        controller.text = before;
+        _blocks.insert(index + 1, Block.checkbox(id: newId, data: after));
+        _registerBlock(newId, after);
+      });
+      _focusBlock(newId, atEnd: false);
+    }
+    _onTextChanged();
+  }
+
+  void _toggleChecklistItem(CheckboxBlock block) {
+    setState(() {
+      final idx = _blocks.indexWhere((b) => b.id == block.id);
+      if (idx != -1) {
+        final current = _blocks[idx] as CheckboxBlock;
+        _blocks[idx] = current.copyWith(isChecked: !current.isChecked);
+      }
+    });
+    _onTextChanged();
+  }
+
+  void _removeChecklistItem(String blockId) {
+    final index = _blocks.indexWhere((b) => b.id == blockId);
+    if (index == -1) return;
+    String? focusTarget;
+    setState(() {
+      _blocks.removeAt(index);
+      _unregisterBlock(blockId);
+      _mergeAdjacentTextBlocks();
+      _ensureEditableBlock();
+      final start = index - 1 < _blocks.length ? index - 1 : _blocks.length - 1;
+      for (var i = start; i >= 0; i--) {
+        if (_blocks[i] is! ImageBlock) {
+          focusTarget = _blocks[i].id;
+          break;
+        }
+      }
+    });
+    if (focusTarget != null) _focusBlock(focusTarget!);
+    _onTextChanged();
+  }
+
+  void _onReorder(int oldIndex, int newIndex) {
+    setState(() {
+      if (newIndex > oldIndex) newIndex -= 1;
+      final item = _blocks.removeAt(oldIndex);
+      _blocks.insert(newIndex, item);
+    });
+    _onTextChanged();
+  }
+
+  /// Tapping the empty space under the content focuses the last line.
+  void _focusEnd() {
+    if (_blocks.isEmpty) return;
+    final last = _blocks.lastWhere(
+      (b) => b is! ImageBlock,
+      orElse: () => _blocks.last,
+    );
+    if (last is ImageBlock) return;
+    _focusBlock(last.id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
-    final noteState =
-        widget.noteId != null ? ref.watch(noteNotifierProvider) : null;
-    final currentNote = widget.noteId != null && noteState != null
+    final noteState = _noteId != null ? ref.watch(noteNotifierProvider) : null;
+    final currentNote = _noteId != null && noteState != null
         ? noteState.notes
-            .where((n) => n.note.id == widget.noteId)
+            .where((n) => n.note.id == _noteId)
             .firstOrNull
             ?.note
         : null;
@@ -324,11 +592,9 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
             ?.note
         : null;
 
-    final conflictCopies = widget.noteId != null &&
-            !isConflictCopy &&
-            noteState != null
+    final conflictCopies = _noteId != null && !isConflictCopy && noteState != null
         ? noteState.notes
-            .where((n) => n.note.conflictOf == widget.noteId)
+            .where((n) => n.note.conflictOf == _noteId)
             .map((n) => n.note)
             .toList()
         : <NoteEntity>[];
@@ -337,163 +603,134 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       _initFromNote(currentNote);
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.searchBarBackground,
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 100),
-        child: FloatingActionButton.extended(
-          heroTag: null,
-          onPressed: () {
-            showModalBottomSheet(
-              context: context,
-              backgroundColor: Colors.transparent,
-              builder: (ctx) => _buildSpeedDialMenu(),
-            );
-          },
-          icon: const Center(
-            child: HugeIcon(
-              icon: HugeIcons.strokeRoundedCheckmarkSquare01,
-              color: Colors.white,
-              size: 24,
-            ),
-          ),
-          label: const Text("Check box"),
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-        ),
-      ),
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: _buildTopBar(isConflictCopy: isConflictCopy),
-            ),
+    final title = isConflictCopy
+        ? AppStrings.conflictCopy
+        : (_isEditing ? AppStrings.editNote : AppStrings.newNote);
 
-            if (isConflictCopy && currentNote != null)
-              SliverToBoxAdapter(
-                child: _buildConflictBanner(
-                  copyNote: currentNote,
-                  originalNote: originalNote,
-                  isViewingCopy: true,
-                ),
-              )
-            else if (conflictCopies.isNotEmpty)
-              SliverToBoxAdapter(
-                child: _buildConflictBanner(
-                  copyNote: conflictCopies.first,
-                  originalNote: currentNote,
-                  isViewingCopy: false,
+    final topInset = MediaQuery.paddingOf(context).top;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    const barHeight = 60.0;
+
+    return PopScope(
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) _onExit();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.surface,
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: CustomScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+                slivers: [
+                  SliverToBoxAdapter(child: SizedBox(height: topInset + barHeight)),
+                  if (isConflictCopy && currentNote != null)
+                    SliverToBoxAdapter(
+                      child: _buildConflictBanner(
+                        copyNote: currentNote,
+                        originalNote: originalNote,
+                        isViewingCopy: true,
+                      ),
+                    )
+                  else if (conflictCopies.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: _buildConflictBanner(
+                        copyNote: conflictCopies.first,
+                        originalNote: currentNote,
+                        isViewingCopy: false,
+                      ),
+                    ),
+                  SliverToBoxAdapter(child: _buildTitleInput()),
+                  SliverToBoxAdapter(child: _buildMeta(currentNote)),
+                  SliverToBoxAdapter(child: _buildContentInput()),
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _focusEnd,
+                      // Room so the last line can scroll above the toolbar.
+                      child: const SizedBox(height: 200),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // iOS 26 "scroll edge" fade: text scrolling under the floating
+            // buttons dissolves instead of colliding with them.
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: Container(
+                  height: topInset + barHeight + 8,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        AppColors.surface,
+                        AppColors.surface.withValues(alpha: 0.9),
+                        AppColors.surface.withValues(alpha: 0),
+                      ],
+                      stops: const [0, 0.6, 1],
+                    ),
+                  ),
                 ),
               ),
-
-            SliverToBoxAdapter(child: _buildTitleInput()),
-
-            SliverToBoxAdapter(child: _buildContentInput()),
-
-            SliverToBoxAdapter(child: _buildActionChips()),
-
-            SliverToBoxAdapter(child: _buildAiAssistHeader()),
-
-            SliverToBoxAdapter(child: _buildAiGrid()),
-
-            const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+            ),
+            Positioned(
+              top: topInset + AppSpacing.sm,
+              left: AppSpacing.page,
+              right: AppSpacing.page,
+              child: _buildTopBar(title: title, isConflictCopy: isConflictCopy),
+            ),
+            Positioned(
+              left: AppSpacing.page,
+              right: AppSpacing.page,
+              bottom: (bottomInset > 0 ? bottomInset : AppSpacing.sm) + AppSpacing.xs,
+              child: _buildToolbar(),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSpeedDialMenu() {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.text_fields, color: AppColors.primary),
-            title: const Text('Text Block'),
-            onTap: () {
-              Navigator.pop(context);
-              _insertTextBlock();
-            },
+  /// Floating glass buttons instead of a solid app bar, as in iOS 26.
+  Widget _buildTopBar({required String title, required bool isConflictCopy}) {
+    return Row(
+      children: [
+        GlassIconButton(
+          icon: CupertinoIcons.chevron_back,
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+        Expanded(
+          child: Text(
+            title,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyles.cardTitle,
           ),
-          ListTile(
-            leading: const Icon(Icons.check_box, color: AppColors.primary),
-            title: const Text('Checklist'),
-            onTap: () {
-              Navigator.pop(context);
-              _insertCheckboxBlock();
-            },
+        ),
+        if (_noteId != null && !isConflictCopy) ...[
+          GlassIconButton(
+            icon: CupertinoIcons.ellipsis,
+            tooltip: 'More',
+            onPressed: _confirmDelete,
           ),
-          ListTile(
-            leading: const Icon(Icons.image, color: AppColors.primary),
-            title: const Text('Image'),
-            onTap: () {
-              Navigator.pop(context);
-              _insertImage();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTopBar({bool isConflictCopy = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white,
-                border: Border.all(color: AppColors.borderColor, width: 1),
-              ),
-              child: HugeIcon(
-                icon: HugeIcons.strokeRoundedArrowLeft01,
-                color: AppColors.textPrimary,
-                size: 15,
-              ),
-            ),
-          ),
-
-          Expanded(
-            child: Text(
-              isConflictCopy
-                  ? 'Conflict Copy'
-                  : (_isEditing ? AppStrings.editNote : AppStrings.createNote),
-              style: TextStyles.screenTitleStyle,
-              textAlign: TextAlign.center,
-            ),
-          ),
-
-          GestureDetector(
-            onTap: _saveNote,
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white,
-                border: Border.all(color: AppColors.borderColor, width: 1),
-              ),
-              child: const Icon(
-                Icons.check,
-                color: AppColors.textPrimary,
-                size: 20,
-              ),
-            ),
-          ),
-        ],
-      ),
+          const SizedBox(width: AppSpacing.sm),
+        ] else
+          const SizedBox(width: 44 + AppSpacing.sm),
+        GlassIconButton(
+          icon: CupertinoIcons.checkmark_alt,
+          tooltip: 'Done',
+          prominent: true,
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ],
     );
   }
 
@@ -1167,6 +1404,19 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
           conflictField: null,
         ),
       );
+    } else {
+      final newId = const Uuid().v4();
+      ref.read(noteNotifierProvider.notifier).addNote(
+        NoteEntity(
+          id: newId,
+          title: finalTitle,
+          body: finalBody,
+          createdAt: DateTime.now().toUtc(),
+          updatedAt: DateTime.now().toUtc(),
+          conflictOf: null,
+          conflictField: null,
+        ),
+      );
     }
 
     ref.read(noteNotifierProvider.notifier).deleteNote(copyNote.id);
@@ -1174,9 +1424,11 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Kept conflict copy. Original note updated.'),
-          duration: Duration(seconds: 3),
+        SnackBar(
+          content: Text(originalNote != null
+              ? 'Kept conflict copy. Original note updated.'
+              : 'Original note not found. Saved copy as a new note.'),
+          duration: const Duration(seconds: 3),
         ),
       );
       if (isCurrentlyViewingCopy) {
@@ -1218,195 +1470,93 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
 
   Widget _buildTitleInput() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: 0.55),
-                  Colors.white.withValues(alpha: 0.35),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.60),
-                width: 1.2,
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _titleController,
-                    onChanged: (_) => _onTextChanged(),
-                    style: TextStyles.inputTitleStyle,
-                    decoration: InputDecoration(
-                      hintText: AppStrings.titleHint,
-                      hintStyle: TextStyles.inputHintStyle,
-                      border: InputBorder.none,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.mic_none_rounded,
-                  color: AppColors.primary,
-                  size: 22,
-                ),
-              ],
-            ),
-          ),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.page,
+        AppSpacing.lg,
+        AppSpacing.page,
+        0,
+      ),
+      child: TextField(
+        controller: _titleController,
+        focusNode: _titleFocus,
+        style: TextStyles.headline,
+        maxLines: null,
+        keyboardType: TextInputType.text,
+        textInputAction: TextInputAction.next,
+        textCapitalization: TextCapitalization.sentences,
+        onEditingComplete: () {},
+        onSubmitted: (_) {
+          final first = _blocks.where((b) => b is! ImageBlock).firstOrNull;
+          if (first != null) _focusBlock(first.id);
+        },
+        decoration: InputDecoration(
+          hintText: AppStrings.titleHint,
+          hintStyle: TextStyles.headline.copyWith(color: AppColors.textTertiary),
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
         ),
       ),
     );
   }
 
-  void _splitBlockAtCursor(String blockId) {
-    final index = _blocks.indexWhere((b) => b.id == blockId);
-    if (index == -1) return;
-
-    final text = _controllers[blockId]?.text ?? '';
-    int cursorPosition = _controllers[blockId]?.selection.baseOffset ?? -1;
-
-    if (cursorPosition < 0 || cursorPosition > text.length) {
-      cursorPosition = text.length;
-    }
-
-    final textBefore = text.substring(0, cursorPosition);
-    final textAfter = text.substring(cursorPosition);
-
-    _controllers[blockId]?.text = textBefore;
-
-    final newId = const Uuid().v4();
-    final newBlock = Block.text(id: newId, data: textAfter);
-
-    setState(() {
-      _blocks.insert(index + 1, newBlock);
-      _controllers[newId] = TextEditingController(text: textAfter)
-        ..addListener(_onTextChanged);
-      _focusNodes[newId] = FocusNode();
-      _reindexBlocks();
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNodes[newId]?.requestFocus();
-    });
-    _onTextChanged();
-  }
-
-  void _reindexBlocks() {}
-
-  void _onReorder(int oldIndex, int newIndex) {
-    setState(() {
-      if (newIndex > oldIndex) {
-        newIndex -= 1;
-      }
-      final item = _blocks.removeAt(oldIndex);
-      _blocks.insert(newIndex, item);
-      _reindexBlocks();
-    });
-    _onTextChanged();
-  }
-
-  void _insertCheckboxBlock() {
-    int insertIndex = _blocks.length;
-    for (int i = 0; i < _blocks.length; i++) {
-      final b = _blocks[i];
-      if ((b is TextBlock || b is CheckboxBlock) &&
-          _focusNodes[b.id]?.hasFocus == true) {
-        insertIndex = i + 1;
-        break;
-      }
-    }
-
-    final newId = const Uuid().v4();
-    final newBlock = Block.checkbox(id: newId, data: '');
-    setState(() {
-      _blocks.insert(insertIndex, newBlock);
-      _controllers[newId] = TextEditingController()
-        ..addListener(_onTextChanged);
-      _focusNodes[newId] = FocusNode();
-      _reindexBlocks();
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNodes[newId]?.requestFocus();
-    });
-  }
-
-  void _insertTextBlock() {
-    int insertIndex = _blocks.length;
-    for (int i = 0; i < _blocks.length; i++) {
-      final b = _blocks[i];
-      if ((b is TextBlock || b is CheckboxBlock) &&
-          _focusNodes[b.id]?.hasFocus == true) {
-        insertIndex = i + 1;
-        break;
-      }
-    }
-
-    final newId = const Uuid().v4();
-    final newBlock = Block.text(id: newId, data: '');
-    setState(() {
-      _blocks.insert(insertIndex, newBlock);
-      _controllers[newId] = TextEditingController()
-        ..addListener(_onTextChanged);
-      _focusNodes[newId] = FocusNode();
-      _reindexBlocks();
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNodes[newId]?.requestFocus();
-    });
+  Widget _buildMeta(NoteEntity? note) {
+    final text = note == null
+        ? (_noteId == null ? 'Saves automatically as you type' : 'Saved')
+        : 'Edited ${AppDateFormat.relative(note.updatedAt)}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.page,
+        AppSpacing.sm,
+        AppSpacing.page,
+        AppSpacing.md,
+      ),
+      child: Text(text, style: TextStyles.caption),
+    );
   }
 
   Widget _buildContentInput() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: 0.55),
-                  Colors.white.withValues(alpha: 0.35),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.60),
-                width: 1.2,
-              ),
-            ),
-            child: ReorderableListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _blocks.length,
-              onReorder: _onReorder,
-              proxyDecorator: (child, index, animation) {
-                return Material(color: Colors.transparent, child: child);
-              },
-              itemBuilder: (context, index) {
-                final block = _blocks[index];
-                return Container(
-                  key: ValueKey(block.id),
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: _buildBlockWidget(block, index),
-                );
-              },
-            ),
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      // Explicit drag handles only — otherwise a long-press inside a text
+      // field (to select text) would start dragging the whole block.
+      buildDefaultDragHandles: false,
+      padding: const EdgeInsets.only(
+        left: AppSpacing.page - AppSpacing.sm,
+        right: AppSpacing.page,
+      ),
+      itemCount: _blocks.length,
+      onReorder: _onReorder,
+      proxyDecorator: (child, index, animation) => Material(
+        color: AppColors.surface,
+        elevation: 4,
+        shadowColor: Colors.black26,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        child: child,
+      ),
+      itemBuilder: (context, index) {
+        final block = _blocks[index];
+        return KeyedSubtree(
+          key: ValueKey(block.id),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: _buildBlockWidget(block, index),
           ),
+        );
+      },
+    );
+  }
+
+  Widget _dragHandle(int index, {double top = 4}) {
+    return ReorderableDragStartListener(
+      index: index,
+      child: Padding(
+        padding: EdgeInsets.only(top: top, right: 6),
+        child: Icon(
+          CupertinoIcons.line_horizontal_3,
+          size: 16,
+          color: AppColors.textTertiary.withValues(alpha: 0.7),
         ),
       ),
     );
@@ -1416,43 +1566,31 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     if (block is ImageBlock) return _buildImageBlock(block, index);
     if (block is TextBlock) return _buildTextBlock(block, index);
     if (block is CheckboxBlock) return _buildCheckboxBlock(block, index);
-    return const SizedBox();
+    return const SizedBox.shrink();
   }
 
   Widget _buildTextBlock(TextBlock block, int index) {
+    final isOnlyBlock = _blocks.length == 1;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ReorderableDragStartListener(
-          index: index,
-          child: const Padding(
-            padding: EdgeInsets.only(top: 8.0, right: 8.0),
-            child: Icon(Icons.drag_indicator, size: 16, color: Colors.black26),
-          ),
-        ),
+        _dragHandle(index),
         Expanded(
-          child: Focus(
-            onKeyEvent: (node, event) {
-              if (event is KeyDownEvent &&
-                  event.logicalKey == LogicalKeyboardKey.enter &&
-                  !HardwareKeyboard.instance.isShiftPressed) {
-                _splitBlockAtCursor(block.id);
-                return KeyEventResult.handled;
-              }
-              return KeyEventResult.ignored;
-            },
-            child: TextField(
-              controller: _controllers[block.id],
-              focusNode: _focusNodes[block.id],
-              style: TextStyles.inputContentStyle,
-              maxLines: null,
-              decoration: InputDecoration(
-                hintText: AppStrings.contentHint,
-                hintStyle: TextStyles.inputHintStyle,
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                isDense: true,
-              ),
+          child: TextField(
+            controller: _controllers[block.id],
+            focusNode: _focusNodes[block.id],
+            style: TextStyles.body,
+            maxLines: null,
+            keyboardType: TextInputType.multiline,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              hintText: isOnlyBlock || index == _blocks.length - 1
+                  ? AppStrings.contentHint
+                  : null,
+              hintStyle: TextStyles.hint,
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+              isDense: true,
             ),
           ),
         ),
@@ -1461,66 +1599,69 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
   }
 
   Widget _buildCheckboxBlock(CheckboxBlock block, int index) {
+    final hasFocus = _focusNodes[block.id]?.hasFocus ?? false;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ReorderableDragStartListener(
-          index: index,
-          child: const Padding(
-            padding: EdgeInsets.only(top: 8.0, right: 8.0),
-            child: Icon(Icons.drag_indicator, size: 16, color: Colors.black26),
-          ),
-        ),
+        _dragHandle(index, top: 5),
         GestureDetector(
-          onTap: () {
-            setState(() {
-              final idx = _blocks.indexWhere((b) => b.id == block.id);
-              if (idx != -1) {
-                _blocks[idx] = block.copyWith(isChecked: !block.isChecked);
-                _onTextChanged();
-              }
-            });
-          },
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _toggleChecklistItem(block),
           child: Padding(
-            padding: const EdgeInsets.only(top: 2.0, right: 8.0),
-            child: Icon(
-              block.isChecked ? Icons.check_box : Icons.check_box_outline_blank,
-              color: block.isChecked
-                  ? AppColors.primary
-                  : AppColors.iconDefault,
-              size: 20,
+            padding: const EdgeInsets.only(top: 1, right: AppSpacing.sm + 2),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, anim) =>
+                  ScaleTransition(scale: anim, child: child),
+              child: Icon(
+                block.isChecked
+                    ? CupertinoIcons.checkmark_circle_fill
+                    : CupertinoIcons.circle,
+                key: ValueKey(block.isChecked),
+                color: block.isChecked ? AppColors.primary : AppColors.textTertiary,
+                size: 24,
+              ),
             ),
           ),
         ),
         Expanded(
-          child: Focus(
-            onKeyEvent: (node, event) {
-              if (event is KeyDownEvent &&
-                  event.logicalKey == LogicalKeyboardKey.enter &&
-                  !HardwareKeyboard.instance.isShiftPressed) {
-                _splitBlockAtCursor(block.id);
-                return KeyEventResult.handled;
-              }
-              return KeyEventResult.ignored;
-            },
-            child: TextField(
-              controller: _controllers[block.id],
-              focusNode: _focusNodes[block.id],
-              style: TextStyles.inputContentStyle.copyWith(
-                decoration: block.isChecked ? TextDecoration.lineThrough : null,
-                color: block.isChecked ? Colors.grey : AppColors.textPrimary,
-              ),
-              maxLines: null,
-              decoration: const InputDecoration(
-                hintText: 'To-do',
-                hintStyle: TextStyle(color: Colors.black38),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                isDense: true,
-              ),
+          child: TextField(
+            controller: _controllers[block.id],
+            focusNode: _focusNodes[block.id],
+            style: TextStyles.body.copyWith(
+              decoration: block.isChecked ? TextDecoration.lineThrough : null,
+              color: block.isChecked ? AppColors.textSecondary : AppColors.textPrimary,
+            ),
+            // Wraps visually, but Return creates the next item instead of a
+            // newline (newlines can't be stored inside a checklist item).
+            maxLines: null,
+            keyboardType: TextInputType.text,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.sentences,
+            onEditingComplete: () {},
+            onSubmitted: (_) => _onChecklistSubmitted(block.id),
+            decoration: const InputDecoration(
+              hintText: AppStrings.checklistHint,
+              hintStyle: TextStyles.hint,
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.only(top: 2),
+              isDense: true,
             ),
           ),
         ),
+        if (hasFocus)
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _removeChecklistItem(block.id),
+            child: const Padding(
+              padding: EdgeInsets.only(left: AppSpacing.sm, top: 3),
+              child: Icon(
+                CupertinoIcons.xmark_circle_fill,
+                size: 20,
+                color: AppColors.textTertiary,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -1529,52 +1670,25 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ReorderableDragStartListener(
-          index: index,
-          child: const Padding(
-            padding: EdgeInsets.only(top: 16.0, right: 8.0),
-            child: Icon(Icons.drag_indicator, size: 16, color: Colors.black26),
-          ),
-        ),
+        _dragHandle(index, top: 14),
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
             child: Stack(
-              alignment: Alignment.topRight,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: AttachmentImage(path: block.data),
+                AttachmentImage(
+                  path: block.data,
+                  fit: BoxFit.cover,
+                  borderRadius: AppRadius.lg,
                 ),
                 Positioned(
-                  top: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _blocks.remove(block);
-                        if (_coverImage == block.data) {
-                          final nextImage = _blocks
-                              .whereType<ImageBlock>()
-                              .firstOrNull;
-                          _coverImage = nextImage?.data;
-                        }
-                        _mergeAdjacentTextBlocks();
-                      });
-                      _onTextChanged();
-                    },
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        color: Colors.black54,
-                        shape: BoxShape.circle,
-                      ),
-                      padding: const EdgeInsets.all(4),
-                      child: const Icon(
-                        Icons.close,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
+                  top: AppSpacing.sm,
+                  right: AppSpacing.sm,
+                  child: GlassIconButton(
+                    icon: CupertinoIcons.xmark,
+                    tooltip: 'Remove image',
+                    size: 34,
+                    onPressed: () => _removeImage(block),
                   ),
                 ),
               ],
@@ -1585,175 +1699,66 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     );
   }
 
-  Widget _buildActionChips() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 8,
-        children: [
-          _actionChip(
-            Icons.image_outlined,
-            AppStrings.insertImage,
-            AppColors.primary,
-            onTap: _insertImage,
-          ),
-          _actionChip(
-            Icons.sell_outlined,
-            AppStrings.addTag,
-            AppColors.aiCoral,
-          ),
-          _actionChip(
-            Icons.folder_outlined,
-            AppStrings.addCategory,
-            AppColors.aiGreen,
-          ),
-          _actionChip(
-            Icons.notifications_none_rounded,
-            AppStrings.reminder,
-            AppColors.aiPurple,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _actionChip(
-    IconData icon,
-    String label,
-    Color iconColor, {
-    VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.chipBorder, width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: iconColor),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyles.actionChipStyle),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAiAssistHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-      child: Text(AppStrings.aiAssist, style: TextStyles.sectionHeaderStyle),
-    );
-  }
-
-  Widget _buildAiGrid() {
-    final aiActions = [
-      (
-        icon: Icons.auto_awesome,
-        title: AppStrings.summarizeNote,
-        bgColor: AppColors.aiCardBgGreen,
-        iconColor: AppColors.aiGreen,
-      ),
-      (
-        icon: Icons.psychology_outlined,
-        title: AppStrings.rewriteClarity,
-        bgColor: AppColors.aiCardBgPurple,
-        iconColor: AppColors.aiPurple,
-      ),
-      (
-        icon: Icons.format_list_bulleted_rounded,
-        title: AppStrings.convertBullets,
-        bgColor: AppColors.aiCardBgPink,
-        iconColor: AppColors.aiPink,
-      ),
-      (
-        icon: Icons.title_rounded,
-        title: AppStrings.generateTitle,
-        bgColor: AppColors.aiCardBgCoral,
-        iconColor: AppColors.aiCoral,
-      ),
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      child: GridView.builder(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.3,
-        ),
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: aiActions.length,
-        itemBuilder: (context, index) {
-          final action = aiActions[index];
-          return _aiCard(
-            icon: action.icon,
-            title: action.title,
-            bgColor: action.bgColor,
-            iconColor: action.iconColor,
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _aiCard({
-    required IconData icon,
-    required String title,
-    required Color bgColor,
-    required Color iconColor,
-  }) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: 0.55),
-                Colors.white.withValues(alpha: 0.35),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.60),
-              width: 1.2,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  /// Floating Liquid Glass toolbar, pinned above the keyboard.
+  Widget _buildToolbar() {
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    return Row(
+      children: [
+        LiquidGlass(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: bgColor,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 20, color: iconColor),
+              _ToolbarButton(
+                icon: CupertinoIcons.checkmark_square,
+                label: 'Checklist',
+                onPressed: _addChecklistItem,
               ),
-              const Spacer(),
-              Text(
-                title,
-                style: TextStyles.aiCardTitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              Container(width: 0.5, height: 22, color: AppColors.border),
+              _ToolbarButton(
+                icon: CupertinoIcons.photo,
+                label: 'Image',
+                onPressed: _insertImage,
               ),
             ],
           ),
         ),
+        const Spacer(),
+        if (keyboardOpen)
+          GlassIconButton(
+            icon: CupertinoIcons.keyboard_chevron_compact_down,
+            tooltip: 'Hide keyboard',
+            onPressed: () => FocusScope.of(context).unfocus(),
+          ),
+      ],
+    );
+  }
+}
+
+class _ToolbarButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  const _ToolbarButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      minimumSize: const Size(44, 46),
+      onPressed: onPressed,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 20, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyles.label),
+        ],
       ),
     );
   }

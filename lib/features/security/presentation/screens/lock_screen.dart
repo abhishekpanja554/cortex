@@ -1,7 +1,6 @@
-import 'dart:ui';
-import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/features/security/presentation/widgets/pin_pad.dart';
 import 'package:cortex/features/security/services/security_service.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cortex/core/providers/core_providers.dart';
@@ -23,6 +22,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
   bool _isPrivateModeEnabled = false;
   bool _isDeviceSecurityAvailable = false;
   bool _showPinPad = false;
+  String? _pinError;
 
   @override
   void initState() {
@@ -106,19 +106,15 @@ class _LockScreenState extends ConsumerState<LockScreen>
   Future<void> _onPinEntered(String pin) async {
     final isValid = await _securityService.verifyAppPin(pin);
     if (mounted) {
-      if (isValid) {
-        setState(() {
+      setState(() {
+        if (isValid) {
           _isAuthenticated = true;
           _showPinPad = false;
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Incorrect PIN"),
-            duration: Duration(seconds: 1),
-          ),
-        );
-      }
+          _pinError = null;
+        } else {
+          _pinError = 'Incorrect PIN. Try again.';
+        }
+      });
     }
   }
 
@@ -133,15 +129,12 @@ class _LockScreenState extends ConsumerState<LockScreen>
         children: [
           widget.child,
 
+          // Fully opaque: locked notes must not be readable behind the lock.
           Positioned.fill(
-            child: ClipRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                child: Container(
-                  color: Colors.black.withValues(alpha: 0.7),
-                  child: Center(
-                    child: _showPinPad ? _buildPinEntry() : _buildDeviceAuth(),
-                  ),
+            child: LockBackdrop(
+              child: SafeArea(
+                child: Center(
+                  child: _showPinPad ? _buildPinEntry() : _buildDeviceAuth(),
                 ),
               ),
             ),
@@ -158,16 +151,17 @@ class _LockScreenState extends ConsumerState<LockScreen>
         children: [
           PinPad(
             onCompleted: _onPinEntered,
-            title: "Cortex is Locked",
-            subtitle: "Enter your app PIN to unlock",
+            title: 'Cortex is locked',
+            subtitle: 'Enter your app PIN to unlock',
+            errorText: _pinError,
           ),
           if (_isDeviceSecurityAvailable) ...[
             const SizedBox(height: 20),
             TextButton(
               onPressed: () => setState(() => _showPinPad = false),
               child: const Text(
-                "Use Biometrics",
-                style: TextStyle(color: AppColors.primary),
+                'Use Face ID / fingerprint',
+                style: TextStyle(color: Colors.white70),
               ),
             ),
           ],
@@ -180,10 +174,10 @@ class _LockScreenState extends ConsumerState<LockScreen>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.lock_outline_rounded, size: 64, color: Colors.white),
+        const Icon(CupertinoIcons.lock_fill, size: 56, color: Colors.white),
         const SizedBox(height: 20),
         const Text(
-          "Cortex is Locked",
+          'Cortex is locked',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -192,26 +186,21 @@ class _LockScreenState extends ConsumerState<LockScreen>
         ),
         const SizedBox(height: 40),
         if (_isAuthenticating)
-          const CircularProgressIndicator(color: AppColors.primary)
+          const CupertinoActivityIndicator(color: Colors.white, radius: 14)
         else
-          ElevatedButton.icon(
-            onPressed: _authenticate,
-            icon: const Icon(Icons.fingerprint),
-            label: const Text("Unlock"),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+          SizedBox(
+            width: 200,
+            child: FilledButton.icon(
+              onPressed: _authenticate,
+              icon: const Icon(CupertinoIcons.lock_open_fill),
+              label: const Text('Unlock'),
             ),
           ),
         const SizedBox(height: 20),
         TextButton(
           onPressed: () => setState(() => _showPinPad = true),
           child: const Text(
-            "Use App PIN",
+            'Use app PIN',
             style: TextStyle(color: Colors.white70),
           ),
         ),

@@ -109,6 +109,27 @@ class DriftNoteRepository implements NoteRepository {
   }
 
   @override
+  Future<void> restoreNote(String id) {
+    return _db.transaction(() async {
+      final res = await (_db.select(
+        _db.notes,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (res == null || res.deletedAt == null) {
+        return;
+      }
+      await (_db.update(_db.notes)..where((t) => t.id.equals(id))).write(
+        NotesCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(DateTime.now().toUtc()),
+          titleDirty: const Value(true),
+          bodyDirty: const Value(true),
+          localRevision: Value(res.localRevision + 1),
+        ),
+      );
+    });
+  }
+
+  @override
   Future<void> wipeAll() async {
     await _db.delete(_db.notes).go();
     await _db.delete(_db.syncState).go();

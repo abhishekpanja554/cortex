@@ -64,4 +64,8 @@ class NoteNotifier extends Notifier<NotesState> {
   void deleteNote(String id) {
     ref.read(noteRepositoryProvider).deleteNote(id);
   }
+
+  void restoreNote(String id) {
+    ref.read(noteRepositoryProvider).restoreNote(id);
+  }
 }

@@ -1,9 +1,9 @@
-import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/core/database/app_database.dart';
 import 'package:cortex/core/database/app_database_provider.dart';
 import 'package:cortex/core/database/database_key_store.dart';
 import 'package:cortex/core/navigation/router.dart';
+import 'package:cortex/core/theme/app_theme.dart';
 import 'package:cortex/features/security/presentation/screens/lock_screen.dart';
 import 'package:cortex/features/sync/presentation/sync_orchestrator.dart';
 import 'package:flutter/material.dart';
@@ -60,13 +60,9 @@ class MyApp extends ConsumerWidget {
     return SyncOrchestrator(
       child: MaterialApp.router(
         title: AppStrings.appTitle,
-        theme: ThemeData(
-          useMaterial3: true,
-          scaffoldBackgroundColor: AppColors.searchBarBackground,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: AppColors.searchBarBackground,
-          ),
-        ),
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        scrollBehavior: AppTheme.scrollBehavior,
         routerConfig: router,
         builder: (context, child) {
           final authState = ref.watch(authProvider);

@@ -39,6 +39,7 @@ class AuthRepository {
       );
       final tokens = _parseTokens(response);
       await _storage.write(tokens);
+      await _storage.writeEmail(email);
       return tokens;
     } on DioException catch (e) {
       throw _mapException(e);
@@ -53,6 +54,7 @@ class AuthRepository {
       );
       final tokens = _parseTokens(response);
       await _storage.write(tokens);
+      await _storage.writeEmail(email);
       return tokens;
     } on DioException catch (e) {
       throw _mapException(e);

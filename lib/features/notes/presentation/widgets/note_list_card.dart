@@ -1,179 +1,183 @@
-
-import 'package:animations/animations.dart';
 import 'package:cortex/core/constants/colors.dart';
+import 'package:cortex/core/constants/dimens.dart';
+import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/core/constants/text_styles.dart';
-import 'package:cortex/features/notes/presentation/state/notes_state.dart';
+import 'package:cortex/core/theme/liquid_glass.dart';
+import 'package:cortex/core/utils/date_format.dart';
 import 'package:cortex/features/notes/domain/entities/note_entity.dart';
-import 'package:cortex/features/notes/presentation/screens/edit_note_screen.dart';
+import 'package:cortex/features/notes/presentation/state/notes_state.dart';
 import 'package:cortex/features/notes/presentation/widgets/attachment_image.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+/// Preview card shown on the Notes and Search tabs.
+///
+/// Pure presentation: navigation and deletion are passed in as callbacks so
+/// the same card works everywhere (and in widget tests without a router).
 class NoteListCard extends StatelessWidget {
   final NotePreview preview;
   final String searchQuery;
+  final VoidCallback? onTap;
+  final VoidCallback? onDelete;
 
-  const NoteListCard({super.key, required this.preview, this.searchQuery = ''});
+  const NoteListCard({
+    super.key,
+    required this.preview,
+    this.searchQuery = '',
+    this.onTap,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
     final note = preview.note;
-    final todoBlocks = preview.topTodos;
+    final allTodos = preview.blocks.whereType<CheckboxBlock>().toList();
+    final todos = preview.topTodos;
+    final doneCount = allTodos.where((t) => t.isChecked).length;
     final coverImage = preview.firstImagePath;
+    final hasTitle = note.title.trim().isNotEmpty;
 
-    return OpenContainer(
-      transitionType: ContainerTransitionType.fadeThrough,
-      openBuilder: (context, _) => EditNoteScreen(noteId: note.id),
-      closedElevation: 0,
-      closedShape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(16)),
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.page,
+        vertical: AppSpacing.xs + 1,
       ),
-      closedColor: Colors.transparent,
-      openColor: AppColors.searchBarBackground,
-      middleColor: AppColors.searchBarBackground,
-      transitionDuration: const Duration(milliseconds: 500),
-      closedBuilder: (context, openContainer) {
-        return GestureDetector(
-          onTap: openContainer,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white.withValues(alpha: 0.90),
-                    Colors.white.withValues(alpha: 0.82),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.65),
-                  width: 1.2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 20,
-                    spreadRadius: 1,
-                    offset: const Offset(0, 6),
-                  ),
-                  BoxShadow(
-                    color: Colors.white.withValues(alpha: 0.50),
-                    blurRadius: 1,
-                    spreadRadius: 0,
-                    offset: const Offset(-1, -1),
-                  ),
-                ],
+      // No backdrop blur per card: long lists stay smooth, and the rim and
+      // sheen still read as glass over the ambient background.
+      child: LiquidGlass.rounded(
+        radius: AppRadius.xl,
+        tint: AppColors.glassFillStrong,
+        blur: 0,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg + 2,
+                AppSpacing.md + 2,
+                AppSpacing.xs,
+                AppSpacing.md + 2,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (note.conflictOf != null) ...[
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF3E0),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: const Color(0xFFFFB74D),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.call_split_rounded,
-                            size: 13,
-                            color: Color(0xFFE65100),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Conflict: ${note.conflictField ?? 'copy'}',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFFE65100),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  if (note.conflictOf != null) _ConflictBadge(field: note.conflictField),
                   Row(
                     children: [
                       Expanded(
-                        child: _highlightSearchTerm(
-                          note.title,
-                          TextStyles.noteTitleStyle,
-                          maxLines: 1,
-                        ),
+                        child: hasTitle
+                            ? _highlight(note.title, TextStyles.cardTitle, maxLines: 1)
+                            : Text(
+                                AppStrings.untitled,
+                                style: TextStyles.cardTitle.copyWith(
+                                  color: AppColors.textTertiary,
+                                ),
+                              ),
                       ),
-                      const Icon(
-                        Icons.more_vert_rounded,
-                        color: AppColors.iconDefault,
-                        size: 22,
-                      ),
+                      if (onDelete != null)
+                        CupertinoButton(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                          minimumSize: const Size(40, 32),
+                          onPressed: () => _showActions(context),
+                          child: const Icon(
+                            CupertinoIcons.ellipsis,
+                            size: 20,
+                            color: AppColors.textSecondary,
+                          ),
+                        )
+                      else
+                        const SizedBox(height: 32, width: AppSpacing.md),
                     ],
                   ),
-
-                  if (coverImage != null && coverImage.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 140,
-                        child: AttachmentImage(
-                          path: coverImage,
-                          fit: BoxFit.cover,
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.md + 2),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (coverImage != null && coverImage.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              top: AppSpacing.sm,
+                              bottom: AppSpacing.sm,
+                            ),
+                            child: AttachmentImage(
+                              path: coverImage,
+                              height: 150,
+                              borderRadius: AppRadius.lg - 4,
+                              hideWhenMissing: true,
+                            ),
+                          ),
+                        if (preview.plainText.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          _highlight(
+                            preview.plainText,
+                            TextStyles.bodySecondary,
+                            maxLines: todos.isEmpty ? 3 : 2,
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                        ],
+                        ...todos.map(_buildTodoItem),
+                        if (allTodos.length > todos.length)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 30, bottom: 4),
+                            child: Text(
+                              '+${allTodos.length - todos.length} more',
+                              style: TextStyles.caption,
+                            ),
+                          ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Row(
+                          children: [
+                            Text(
+                              AppDateFormat.relative(note.updatedAt),
+                              style: TextStyles.caption,
+                            ),
+                            const Spacer(),
+                            if (allTodos.isNotEmpty)
+                              Text(
+                                '$doneCount of ${allTodos.length} done',
+                                style: TextStyles.caption,
+                              ),
+                          ],
                         ),
-                      ),
+                      ],
                     ),
-                  ],
-
-                  if (todoBlocks.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    ...todoBlocks.map((block) => _buildTodoItem(block)),
-                  ],
-
-                  if (todoBlocks.isEmpty && preview.plainText.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    _highlightSearchTerm(
-                      preview.plainText,
-                      TextStyles.noteContentStyle,
-                      maxLines: 2,
-                    ),
-                  ],
-
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Icon(
-                        Icons.calendar_today_outlined,
-                        size: 14,
-                        color: AppColors.textSecondary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _formatRelativeDate(note.createdAt),
-                        style: TextStyles.dateStyle,
-                      ),
-                    ],
                   ),
                 ],
               ),
             ),
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  void _showActions(BuildContext context) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheetContext) => CupertinoActionSheet(
+        title: Text(
+          preview.note.title.trim().isEmpty ? AppStrings.untitled : preview.note.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.of(sheetContext).pop();
+              onDelete?.call();
+            },
+            child: const Text(AppStrings.deleteNote),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(sheetContext).pop(),
+          child: const Text('Cancel'),
+        ),
+      ),
     );
   }
 
@@ -182,29 +186,21 @@ class NoteListCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          Container(
-            width: 20,
-            height: 20,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(5),
-              border: Border.all(color: AppColors.todoCheckbox, width: 1.8),
-              color: block.isChecked
-                  ? AppColors.todoCheckbox.withValues(alpha: 0.08)
-                  : Colors.transparent,
-            ),
-            child: Icon(
-              Icons.check_rounded,
-              size: 14,
-              color: block.isChecked
-                  ? AppColors.todoCheckbox
-                  : Colors.transparent,
-            ),
+          Icon(
+            block.isChecked
+                ? CupertinoIcons.checkmark_circle_fill
+                : CupertinoIcons.circle,
+            size: 20,
+            color: block.isChecked ? AppColors.primary : AppColors.textTertiary,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: AppSpacing.sm + 2),
           Expanded(
-            child: _highlightSearchTerm(
+            child: _highlight(
               block.data,
-              TextStyles.todoItemStyle,
+              TextStyles.bodySecondary.copyWith(
+                color: block.isChecked ? AppColors.textSecondary : AppColors.textPrimary,
+                decoration: block.isChecked ? TextDecoration.lineThrough : null,
+              ),
               maxLines: 1,
             ),
           ),
@@ -213,67 +209,60 @@ class NoteListCard extends StatelessWidget {
     );
   }
 
-  String _formatRelativeDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      return 'Today';
-    } else if (difference.inDays == 1) {
-      return '1 Day Ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} Days Ago';
-    } else if (difference.inDays < 30) {
-      final weeks = (difference.inDays / 7).floor();
-      return '$weeks Week${weeks > 1 ? 's' : ''} Ago';
-    } else {
-      final months = (difference.inDays / 30).floor();
-      return '$months Month${months > 1 ? 's' : ''} Ago';
+  Widget _highlight(String text, TextStyle style, {required int maxLines}) {
+    final query = searchQuery.trim();
+    final start = query.isEmpty ? -1 : text.toLowerCase().indexOf(query.toLowerCase());
+    if (start == -1) {
+      return Text(text, style: style, maxLines: maxLines, overflow: TextOverflow.ellipsis);
     }
-  }
-
-  Widget _highlightSearchTerm(
-    String text,
-    TextStyle baseStyle, {
-    required int maxLines,
-  }) {
-    if (searchQuery.isEmpty) {
-      return Text(
-        text,
-        style: baseStyle,
-        maxLines: maxLines,
-        overflow: TextOverflow.ellipsis,
-      );
-    }
-
-    final String lowerText = text.toLowerCase();
-    final String lowerQuery = searchQuery.toLowerCase();
-    final int startIndex = lowerText.indexOf(lowerQuery);
-
-    if (startIndex == -1) {
-      return Text(
-        text,
-        style: baseStyle,
-        maxLines: maxLines,
-        overflow: TextOverflow.ellipsis,
-      );
-    }
-
+    final end = start + query.length;
     return RichText(
       maxLines: maxLines,
       overflow: TextOverflow.ellipsis,
       text: TextSpan(
-        style: baseStyle,
+        style: style,
         children: [
-          TextSpan(text: text.substring(0, startIndex)),
+          TextSpan(text: text.substring(0, start)),
           TextSpan(
-            text: text.substring(startIndex, startIndex + searchQuery.length),
-            style: baseStyle.copyWith(
-              backgroundColor: AppColors.primary.withValues(alpha: 0.3),
+            text: text.substring(start, end),
+            style: style.copyWith(
+              backgroundColor: const Color(0x66FFD60A), // iOS find highlight
               color: AppColors.textPrimary,
             ),
           ),
-          TextSpan(text: text.substring(startIndex + searchQuery.length)),
+          TextSpan(text: text.substring(end)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConflictBadge extends StatelessWidget {
+  final String? field;
+  const _ConflictBadge({required this.field});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: const ShapeDecoration(
+        color: AppColors.warningSoft,
+        shape: StadiumBorder(side: BorderSide(color: Color(0xFFFFB74D))),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.call_split_rounded, size: 13, color: AppColors.warning),
+          const SizedBox(width: 4),
+          Text(
+            'Conflict: ${field ?? 'copy'}',
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.warning,
+            ),
+          ),
         ],
       ),
     );

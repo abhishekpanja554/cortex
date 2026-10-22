@@ -1,126 +1,82 @@
 import 'package:cortex/core/constants/colors.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
+/// iOS Dynamic Type scale (default size). Uses the platform font, which is
+/// SF Pro on iOS.
 class TextStyles {
-  static TextStyle userNameStyle = GoogleFonts.roboto(
-    fontSize: 16,
+  TextStyles._();
+
+  /// Large title — 34 bold.
+  static const TextStyle display = TextStyle(
+    fontSize: 34,
     fontWeight: FontWeight.w700,
+    letterSpacing: 0.37,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle userSubtitleStyle = GoogleFonts.roboto(
-    fontSize: 13,
-    fontWeight: FontWeight.w400,
-    color: AppColors.textSecondary,
-  );
-
-  static TextStyle searchHintStyle = GoogleFonts.roboto(
-    fontSize: 14,
-    fontWeight: FontWeight.w400,
-    color: AppColors.iconLight,
-  );
-
-  static TextStyle quickActionTitle = GoogleFonts.roboto(
-    fontSize: 14,
-    fontWeight: FontWeight.w600,
+  /// Note title inside the editor — Title 1, 28 bold.
+  static const TextStyle headline = TextStyle(
+    fontSize: 28,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.36,
+    height: 1.2,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle quickActionSubtitle = GoogleFonts.roboto(
-    fontSize: 12,
-    fontWeight: FontWeight.w400,
-    color: AppColors.textSecondary,
-  );
-
-  static TextStyle quickActionTitleWhite = GoogleFonts.roboto(
-    fontSize: 14,
-    fontWeight: FontWeight.w600,
-    color: Colors.white,
-  );
-
-  static TextStyle quickActionSubtitleWhite = GoogleFonts.roboto(
-    fontSize: 12,
-    fontWeight: FontWeight.w400,
-    color: Colors.white.withValues(alpha: 0.85),
-  );
-
-  static TextStyle sectionHeaderStyle = GoogleFonts.roboto(
+  /// Section headers — Title 3, 20 semibold.
+  static const TextStyle title = TextStyle(
     fontSize: 20,
-    fontWeight: FontWeight.w700,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.38,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle noteTitleStyle = GoogleFonts.roboto(
+  /// Card titles, row titles — Headline, 17 semibold.
+  static const TextStyle cardTitle = TextStyle(
     fontSize: 17,
     fontWeight: FontWeight.w600,
+    letterSpacing: -0.41,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle noteContentStyle = GoogleFonts.roboto(
-    fontSize: 14,
+  /// Reading / writing text — Body, 17.
+  static const TextStyle body = TextStyle(
+    fontSize: 17,
     fontWeight: FontWeight.w400,
+    letterSpacing: -0.41,
+    height: 1.35,
+    color: AppColors.textPrimary,
+  );
+
+  /// Previews and subtitles — Subheadline, 15.
+  static const TextStyle bodySecondary = TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w400,
+    letterSpacing: -0.24,
+    height: 1.35,
     color: AppColors.textSecondary,
   );
 
-  static TextStyle todoItemStyle = GoogleFonts.roboto(
-    fontSize: 14,
-    fontWeight: FontWeight.w400,
-    color: AppColors.textPrimary,
-  );
-
-  static TextStyle tagStyle = GoogleFonts.roboto(
-    fontSize: 12,
-    fontWeight: FontWeight.w500,
-    color: AppColors.tagText,
-  );
-
-  static TextStyle dateStyle = GoogleFonts.roboto(
-    fontSize: 12,
-    fontWeight: FontWeight.w400,
-    color: AppColors.textSecondary,
-  );
-
-  static TextStyle fabTextStyle = GoogleFonts.roboto(
-    fontSize: 24,
-    fontWeight: FontWeight.w500,
-    color: Colors.white,
-  );
-
-  static TextStyle screenTitleStyle = GoogleFonts.roboto(
-    fontSize: 20,
-    fontWeight: FontWeight.w700,
-    color: AppColors.textPrimary,
-  );
-
-  static TextStyle inputTitleStyle = GoogleFonts.roboto(
-    fontSize: 16,
-    fontWeight: FontWeight.w500,
-    color: AppColors.textPrimary,
-  );
-
-  static TextStyle inputHintStyle = GoogleFonts.roboto(
+  /// Buttons, chips, field labels — 15 semibold.
+  static const TextStyle label = TextStyle(
     fontSize: 15,
-    fontWeight: FontWeight.w400,
-    color: AppColors.iconLight,
-  );
-
-  static TextStyle inputContentStyle = GoogleFonts.roboto(
-    fontSize: 15,
-    fontWeight: FontWeight.w400,
-    color: AppColors.textPrimary,
-    height: 1.6,
-  );
-
-  static TextStyle actionChipStyle = GoogleFonts.roboto(
-    fontSize: 13,
-    fontWeight: FontWeight.w500,
-    color: AppColors.textPrimary,
-  );
-
-  static TextStyle aiCardTitle = GoogleFonts.roboto(
-    fontSize: 13,
     fontWeight: FontWeight.w600,
+    letterSpacing: -0.24,
     color: AppColors.textPrimary,
+  );
+
+  /// Dates, counts, section footers — Footnote, 13.
+  static const TextStyle caption = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w400,
+    letterSpacing: -0.08,
+    color: AppColors.textSecondary,
+  );
+
+  static const TextStyle hint = TextStyle(
+    fontSize: 17,
+    fontWeight: FontWeight.w400,
+    letterSpacing: -0.41,
+    color: AppColors.textTertiary,
   );
 }

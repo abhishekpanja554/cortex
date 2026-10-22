@@ -84,11 +84,11 @@ class SecurityService {
 
     try {
       return await _auth.authenticate(
-        localizedReason: 'Pls authenticate to access Cortex',
+        localizedReason: 'Unlock your Cortex notes',
         authMessages: const [
           AndroidAuthMessages(
-            signInTitle: 'Biometric authentication required',
-            signInHint: 'Verify identity',
+            signInTitle: 'Unlock Cortex',
+            signInHint: 'Confirm it’s you',
           ),
         ],
         biometricOnly: false,

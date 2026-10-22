@@ -243,5 +243,45 @@ void main() {
       verify(() => mockRepository.deleteNote('copy-456')).called(1);
       verify(() => mockSyncScheduler.requestSync()).called(1);
     });
+
+    testWidgets(
+        'Keep Copy when original is missing saves copy content as a new note, deletes copy, and syncs',
+        (tester) async {
+      when(() => mockRepository.watchAllNotes())
+          .thenAnswer((_) => Stream.value([copyNote])); // origNote is missing!
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            noteRepositoryProvider.overrideWithValue(mockRepository),
+            syncSchedulerProvider.overrideWithValue(mockSyncScheduler),
+          ],
+          child: const MaterialApp(
+            home: EditNoteScreen(noteId: 'copy-456'),
+          ),
+        ),
+      );
+
+      notesStream.add([copyNote]);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Keep Copy'));
+      await tester.pumpAndSettle();
+
+      final captured = verify(() => mockRepository.saveNote(captureAny())).captured;
+      expect(captured.isNotEmpty, isTrue);
+      final savedNote = captured.last as NoteEntity;
+
+      // Brand new note created with its own ID (not orig-123 and not copy-456)
+      expect(savedNote.id, isNot('orig-123'));
+      expect(savedNote.id, isNot('copy-456'));
+      expect(savedNote.title, 'Copy Title');
+      expect(savedNote.body, 'Local conflicting edits made offline');
+      expect(savedNote.conflictOf, isNull);
+      expect(savedNote.conflictField, isNull);
+
+      verify(() => mockRepository.deleteNote('copy-456')).called(1);
+      verify(() => mockSyncScheduler.requestSync()).called(1);
+    });
   });
 }

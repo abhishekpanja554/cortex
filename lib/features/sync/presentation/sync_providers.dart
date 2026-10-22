@@ -29,3 +29,9 @@ final syncSchedulerProvider = Provider<SyncScheduler>((ref) {
   ref.onDispose(() => scheduler.dispose());
   return scheduler;
 });
+
+/// Latest sync status for the UI (header chip). Emits nothing until the
+/// scheduler reports, so treat "no value yet" as idle.
+final syncStatusProvider = StreamProvider<SyncStatus>((ref) {
+  return ref.watch(syncSchedulerProvider).statusStream;
+});

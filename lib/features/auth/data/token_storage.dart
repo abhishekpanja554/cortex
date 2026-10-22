@@ -27,9 +27,11 @@ class TokenStorage {
   final SharedPreferences _prefs;
   
   static const _key = 'cortex_tokens';
+  static const _emailKey = 'cortex_user_email';
   static const _flag = 'has_run_before';
 
   AuthTokens? _cached;
+  String? _cachedEmail;
 
   TokenStorage(this._secure, this._prefs);
 
@@ -78,11 +80,27 @@ class TokenStorage {
     }
   }
 
+  Future<String?> readEmail() async {
+    if (_cachedEmail != null) return _cachedEmail;
+    final value = await _secure.read(key: _emailKey);
+    _cachedEmail = value;
+    return value;
+  }
+
+  Future<void> writeEmail(String email) async {
+    _cachedEmail = email;
+    await _secure.write(key: _emailKey, value: email);
+  }
+
   Future<void> clear() async {
     _version++;
     _cached = null;
+    _cachedEmail = null;
     await _secure.delete(
       key: _key,
+    );
+    await _secure.delete(
+      key: _emailKey,
     );
   }
 }

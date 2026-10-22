@@ -1,37 +1,44 @@
 class AppStrings {
+  AppStrings._();
+
   static const String appTitle = 'Cortex';
+
+  // Splash
   static const String inotes = 'Cortex ';
   static const String ai = 'AI';
   static const String tagline = 'Think. Write. Create.';
-  static const String business = 'Business';
-  static const String school = 'School';
-  static const String addNote = 'Add Note';
+
+  // Tabs / page titles
   static const String notes = 'Notes';
+  static const String search = 'Search';
+  static const String settings = 'Settings';
 
-  static const String searchHint = 'Search notes, tags...';
+  // Home
+  static const String create = 'Create';
+  static const String recentNotes = 'Recent';
+  static const String textNote = 'Note';
+  static const String checklistNote = 'Checklist';
+  static const String imageNote = 'Image';
+  static const String noNotesTitle = 'No notes yet';
+  static const String noNotesBody =
+      'Tap Note, Checklist or Image above to capture your first thought.';
 
-  static const String textNote = 'Text Note';
-  static const String voiceNote = 'Voice Note';
-  static const String imageNote = 'Image Note';
-  static const String aiNote = 'AI Note';
-  static const String textNoteDesc = 'Write and save your thoughts';
-  static const String voiceNoteDesc = 'Record and save your voice';
-  static const String imageNoteDesc = 'Capture notes from images';
-  static const String aiNoteDesc = 'Create notes with AI assistance';
+  // Search
+  static const String searchHint = 'Search notes and checklists';
+  static const String searchEmptyTitle = 'Search your notes';
+  static const String searchEmptyBody =
+      'Matches titles, text and checklist items.';
+  static const String searchNoResults = 'No matching notes';
 
-  static const String recentNotes = 'Recent Notes';
-
-  static const String createNote = 'Create Note';
+  // Editor
+  static const String newNote = 'New Note';
   static const String editNote = 'Edit Note';
-  static const String titleHint = 'Note title...';
-  static const String contentHint = 'Write Your Notes...';
-  static const String addTag = 'Add Tag';
-  static const String addCategory = 'Add Category';
-  static const String insertImage = 'Insert Image';
-  static const String reminder = 'Reminder';
-  static const String aiAssist = 'AI Assist';
-  static const String summarizeNote = 'Summarize\nNote';
-  static const String rewriteClarity = 'Rewrite for\nClarity';
-  static const String convertBullets = 'Convert to\nBullets';
-  static const String generateTitle = 'Generate\nTitle';
+  static const String conflictCopy = 'Conflict Copy';
+  static const String titleHint = 'Title';
+  static const String contentHint = 'Start writing…';
+  static const String checklistHint = 'List item';
+  static const String untitled = 'Untitled';
+  static const String deleteNote = 'Delete Note';
+  static const String noteDeleted = 'Note deleted';
+  static const String undo = 'Undo';
 }

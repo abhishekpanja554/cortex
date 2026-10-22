@@ -58,8 +58,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'edit-note',
             builder: (context, state) {
-              final noteId = state.uri.queryParameters['id'];
-              return EditNoteScreen(noteId: noteId);
+              final params = state.uri.queryParameters;
+              return EditNoteScreen(
+                noteId: params['id'],
+                template: NoteTemplate.fromName(params['type']),
+              );
             },
           ),
         ],
