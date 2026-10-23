@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Cortex (LAN / Physical Device)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=API_BASE_URL=http://192.168.1.38:8080",
+        "--dart-define=AI_BASE_URL=http://192.168.1.38:8000"
+      ]
+    },
+    {
+      "name": "Cortex (Localhost / Emulator)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart"
+    }
+  ]
+}
