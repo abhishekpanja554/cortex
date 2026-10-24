@@ -4,11 +4,18 @@ import 'package:dio/dio.dart';
 /// Failures that can occur during cortex-ai communication.
 sealed class AiFailure implements Exception {
   const AiFailure();
+
+  String? get message => switch (this) {
+        AiUnavailable(:final message) => message,
+        RateLimited() => 'Rate limit exceeded',
+        AiServerError(:final message) => message,
+      };
 }
 
 /// Cortex-ai service is down or unreachable (connection refused, connect timeout).
 /// Spec §9: chat fails clearly, and notes and sync keep working.
 class AiUnavailable extends AiFailure {
+  @override
   final String? message;
   const AiUnavailable([this.message]);
 
@@ -45,6 +52,7 @@ class RateLimited extends AiFailure {
 
 /// 5xx server error, or broken/interrupted stream.
 class AiServerError extends AiFailure {
+  @override
   final String? message;
   final int? statusCode;
   const AiServerError([this.message, this.statusCode]);
@@ -76,7 +84,14 @@ AiFailure mapDioExceptionToAiFailure(DioException e) {
   }
 
   if (statusCode != null && statusCode >= 500 && statusCode < 600) {
-    return AiServerError(response?.statusMessage ?? 'Server error', statusCode);
+    String message = response?.statusMessage ?? 'Server error';
+    final data = response?.data;
+    if (data is Map && data['detail'] != null) {
+      message = data['detail'].toString();
+    } else if (data is String && data.isNotEmpty) {
+      message = data;
+    }
+    return AiServerError(message, statusCode);
   }
 
   if (e.type == DioExceptionType.connectionTimeout ||

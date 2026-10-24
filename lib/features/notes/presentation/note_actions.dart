@@ -23,6 +23,7 @@ class NoteActions {
       ..showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 4),
+          persist: false,
           content: const Text(AppStrings.noteDeleted),
           action: SnackBarAction(
             label: AppStrings.undo,

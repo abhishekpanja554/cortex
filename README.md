@@ -75,8 +75,15 @@ The project includes Unit and Widget tests. To run the test suite:
 flutter test
 ```
 
+## 📐 Key Architectural Decisions
+
+### Background Chat Streaming
+Leaving the chat screen while an AI response is actively streaming does not cancel the request. `chatNotifierProvider` is scoped to the user session lifecycle (disposing only on user logout or account switch), allowing LLM responses to stream in the background so the answer is ready when the user returns.
+* **Tradeoff**: The server continues generating tokens and incurring Gemini LLM cost even if the user navigates away and never reads the response.
+
 ## 🤝 Contributing
 Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/yourusername/cortex/issues).
 
 ## 📝 License
 This project is licensed under the MIT License.
+

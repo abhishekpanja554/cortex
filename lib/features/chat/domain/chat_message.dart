@@ -3,7 +3,7 @@ import 'chat_source.dart';
 
 enum MessageSender { user, assistant }
 
-enum ChatMessageStatus { streaming, done, error, aiUnavailable }
+enum ChatMessageStatus { streaming, done, error, aiUnavailable, stopped }
 
 /// A single message turn within the chat conversation.
 class ChatMessage {
@@ -12,7 +12,7 @@ class ChatMessage {
   final String text; // built up from Token events, or one Answer
   final List<ChatSource> sources;
   final bool fromCache;
-  final ChatMessageStatus status; // streaming | done | error | aiUnavailable
+  final ChatMessageStatus status; // streaming | done | error | aiUnavailable | stopped
   final String? errorText;
 
   const ChatMessage({

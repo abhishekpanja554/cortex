@@ -10,6 +10,8 @@ import 'package:cortex/features/auth/presentation/screens/login_screen.dart';
 import 'package:cortex/features/auth/presentation/screens/register_screen.dart';
 import 'package:flutter/foundation.dart';
 
+import 'package:cortex/features/chat/presentation/screens/chat_screen.dart';
+
 final routerProvider = Provider<GoRouter>((ref) {
   final authStateNotifier = ValueNotifier<AuthState>(ref.read(authProvider));
   
@@ -50,6 +52,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/splash',
         builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: '/chat',
+        builder: (context, state) => const ChatScreen(initialMode: ChatMode.ask),
+      ),
+      GoRoute(
+        path: '/agent-chat',
+        builder: (context, state) => const ChatScreen(initialMode: ChatMode.agent),
       ),
       GoRoute(
         path: '/',

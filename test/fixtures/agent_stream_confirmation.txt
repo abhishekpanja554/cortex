@@ -1,0 +1,8 @@
+data: {"type": "tool_call", "tool": "search_notes", "args": {"query": "Goa"}}
+
+data: {"type": "tool_result", "tool": "search_notes", "result": {"results": [{"note_id": "01e43fa2-d591-4c91-b962-d4b321a50a11", "snippet": "Goa trip details\n\nFlight at 10am, Candolim beach hotel"}]}}
+
+data: {"type": "confirmation_required", "confirmation_id": "c7a8b9c0-1234-5678-9abc-def012345678", "tool": "delete_note", "args": {"note_id": "01e43fa2-d591-4c91-b962-d4b321a50a11"}}
+
+data: {"type": "done"}
+

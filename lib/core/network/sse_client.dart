@@ -57,6 +57,58 @@ class SseClient {
     }
   }
 
+  /// Confirms or rejects a pending destructive agent action.
+  /// Returns a map containing the status: 'executed' | 'rejected' | 'already_executed' | 'already_rejected' | 'in_progress' | 'not_found' | 'error'.
+  Future<Map<String, dynamic>> confirmAction({
+    required String confirmationId,
+    required bool approve,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        '/agent-chat/confirm',
+        data: {
+          'confirmation_id': confirmationId,
+          'approve': approve,
+        },
+        cancelToken: cancelToken,
+      );
+      final data = response.data;
+      if (data is Map && data.containsKey('status')) {
+        return Map<String, dynamic>.from(data);
+      }
+      throw const AiServerError('Unexpected response from approval server');
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return {
+          'status': 'not_found',
+          'message': (e.response?.data is Map)
+              ? (e.response?.data['detail'] ??
+                  'Pending action not found or already resolved')
+              : 'Pending action not found or already resolved',
+        };
+      }
+      if (e.response?.statusCode == 409) {
+        final data = e.response?.data;
+        final detail = (data is Map) ? data['detail'] : null;
+        if (detail is Map) {
+          return {
+            'status': detail['status']?.toString() ?? 'conflict',
+            'message': detail['message']?.toString() ?? 'Action conflict',
+          };
+        }
+        return {
+          'status': 'conflict',
+          'message': 'Action conflict',
+        };
+      }
+      throw mapDioExceptionToAiFailure(e);
+    } catch (e) {
+      if (e is AiFailure) rethrow;
+      throw AiServerError(e.toString());
+    }
+  }
+
   /// Parses raw byte stream chunks conforming to the SSE specification.
   ///
   /// Uses [utf8.decoder] as a [StreamTransformer] to safely handle multi-byte

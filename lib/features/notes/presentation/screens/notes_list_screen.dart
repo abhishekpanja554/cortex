@@ -1,3 +1,4 @@
+import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/core/constants/dimens.dart';
 import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/core/constants/text_styles.dart';
@@ -27,9 +28,39 @@ class NotesListScreen extends ConsumerWidget {
 
     return CustomScrollView(
       slivers: [
-        const AppLargeTitleBar(
+        AppLargeTitleBar(
           title: AppStrings.notes,
-          trailing: SyncStatusChip(),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Semantics(
+                button: true,
+                label: 'Chat with AI',
+                child: GestureDetector(
+                  onTap: () => NoteRoutes.openChat(context),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.sparkles,
+                      size: 16,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              const SyncStatusChip(),
+            ],
+          ),
         ),
         CupertinoSliverRefreshControl(
           onRefresh: () async {

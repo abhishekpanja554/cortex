@@ -295,4 +295,132 @@ void main() {
       ]);
     });
   });
+
+  group('SseClient confirmAction tests', () {
+    test('confirmAction returns status map on valid response', () async {
+      final dio = Dio();
+      dio.httpClientAdapter = _FakeAdapter((options) async {
+        return ResponseBody.fromString(
+          jsonEncode({'status': 'executed', 'message': 'Action completed'}),
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        );
+      });
+      final sseClient = SseClient(dio);
+      final res = await sseClient.confirmAction(
+        confirmationId: 'conf-123',
+        approve: true,
+      );
+      expect(res['status'], equals('executed'));
+    });
+
+    test('confirmAction returns not_found status on 404 response', () async {
+      final dio = Dio();
+      dio.httpClientAdapter = _FakeAdapter((options) async {
+        throw DioException(
+          requestOptions: options,
+          response: Response(
+            requestOptions: options,
+            statusCode: 404,
+            data: {'detail': 'Pending action not found, already resolved, or not yours.'},
+          ),
+          type: DioExceptionType.badResponse,
+        );
+      });
+      final sseClient = SseClient(dio);
+      final res = await sseClient.confirmAction(
+        confirmationId: 'conf-123',
+        approve: true,
+      );
+      expect(res['status'], equals('not_found'));
+      expect(res['message'], equals('Pending action not found, already resolved, or not yours.'));
+    });
+
+    test('confirmAction throws AiServerError when response body is unexpected/non-map (e.g. proxy HTML)', () async {
+      final dio = Dio();
+      dio.httpClientAdapter = _FakeAdapter((options) async {
+        return ResponseBody.fromString(
+          '<html><body>Proxy Gateway Error</body></html>',
+          200,
+          headers: {
+            Headers.contentTypeHeader: ['text/html'],
+          },
+        );
+      });
+      final sseClient = SseClient(dio);
+      expect(
+        () => sseClient.confirmAction(
+          confirmationId: 'conf-123',
+          approve: true,
+        ),
+        throwsA(isA<AiServerError>()),
+      );
+    });
+
+    test('confirmAction throws AiServerError when response JSON is missing status', () async {
+      final dio = Dio();
+      dio.httpClientAdapter = _FakeAdapter((options) async {
+        return ResponseBody.fromString(
+          jsonEncode({'unknown_field': 123}),
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        );
+      });
+      final sseClient = SseClient(dio);
+      expect(
+        () => sseClient.confirmAction(
+          confirmationId: 'conf-123',
+          approve: true,
+        ),
+        throwsA(isA<AiServerError>()),
+      );
+    });
+
+    test('confirmAction returns status and message from 409 conflict response', () async {
+      final dio = Dio();
+      dio.httpClientAdapter = _FakeAdapter((options) async {
+        throw DioException(
+          requestOptions: options,
+          response: Response(
+            requestOptions: options,
+            statusCode: 409,
+            data: {
+              'detail': {
+                'status': 'already_executed',
+                'message': 'Action already carried out.',
+              },
+            },
+          ),
+          type: DioExceptionType.badResponse,
+        );
+      });
+      final sseClient = SseClient(dio);
+      final res = await sseClient.confirmAction(
+        confirmationId: 'conf-123',
+        approve: true,
+      );
+      expect(res['status'], equals('already_executed'));
+      expect(res['message'], equals('Action already carried out.'));
+    });
+
+    test('mapDioExceptionToAiFailure extracts detail string from 5xx error body', () {
+      final dioException = DioException(
+        requestOptions: RequestOptions(path: '/agent-chat/confirm'),
+        response: Response(
+          requestOptions: RequestOptions(path: '/agent-chat/confirm'),
+          statusCode: 500,
+          data: {'detail': 'Database transaction deadlock occurred'},
+        ),
+        type: DioExceptionType.badResponse,
+      );
+      final failure = mapDioExceptionToAiFailure(dioException);
+      expect(failure, isA<AiServerError>());
+      expect(failure.message, equals('Database transaction deadlock occurred'));
+    });
+  });
 }
+

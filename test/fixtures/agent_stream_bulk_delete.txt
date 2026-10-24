@@ -1,0 +1,4 @@
+data: {"type": "confirmation_required", "confirmation_id": "c7a8b9c0-1234-5678-9abc-def012345679", "tool": "bulk_delete_notes", "args": {"note_ids": ["01e43fa2-d591-4c91-b962-d4b321a50a11", "9b8a7c6d-5e4f-3a2b-1c0d-ef0123456789"]}}
+
+data: {"type": "done"}
+

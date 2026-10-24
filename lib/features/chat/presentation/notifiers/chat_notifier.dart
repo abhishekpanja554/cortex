@@ -31,7 +31,44 @@ class ChatNotifier extends Notifier<ChatState> {
   /// Clears the current conversation, resetting messages and conversationId.
   void newConversation() {
     _cancelToken?.cancel();
+    _cancelToken = null;
     state = const ChatState();
+  }
+
+  /// Cancels an in-flight streaming request, keeping any partial text received.
+  void cancel() {
+    _cancelToken?.cancel();
+    _cancelToken = null;
+    if (state.isStreaming) {
+      state = state.copyWith(
+        isStreaming: false,
+        messages: state.messages.map((m) {
+          if (m.status == ChatMessageStatus.streaming) {
+            return m.copyWith(status: ChatMessageStatus.stopped);
+          }
+          return m;
+        }).toList(),
+      );
+    }
+  }
+
+  /// Retries a failed message turn by re-sending the preceding user question.
+  Future<void> retry(String failedMessageId) async {
+    final errorIndex = state.messages.indexWhere((m) => m.id == failedMessageId);
+    if (errorIndex == -1) return;
+    String? query;
+    for (int i = errorIndex - 1; i >= 0; i--) {
+      if (state.messages[i].sender == MessageSender.user) {
+        query = state.messages[i].text;
+        break;
+      }
+    }
+    if (query == null) return;
+    // Remove the failed assistant message and re-send the question
+    state = state.copyWith(
+      messages: state.messages.where((m) => m.id != failedMessageId).toList(),
+    );
+    await send(query);
   }
 
   /// Sends a user question and handles streaming responses from cortex-ai.
