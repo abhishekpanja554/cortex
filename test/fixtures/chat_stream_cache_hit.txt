@@ -1,0 +1,8 @@
+data: {"type": "conversation_id", "conversation_id": "4eeb182d-7c06-4e0c-9092-39200f2a90d9"}
+
+data: {"type": "cache_hit", "cache_hit": true}
+
+data: {"type": "answer", "text": "I cannot answer this based on the provided documents."}
+
+data: {"type": "done"}
+
