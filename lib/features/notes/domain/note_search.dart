@@ -1,18 +1,22 @@
-import 'package:cortex/features/notes/domain/entities/note_entity.dart';
-import 'package:cortex/features/notes/presentation/state/notes_state.dart';
+import 'package:cortex/core/perf/perf.dart';
+import 'package:cortex/features/notes/domain/entities/note_list_item.dart';
 
 /// Case-insensitive match on title, text and checklist items, newest first.
-List<NotePreview> searchNotes(List<NotePreview> notes, String query) {
+List<NoteListItem> searchNotes(List<NoteListItem> notes, String query) {
   final q = query.trim().toLowerCase();
-  final matches = q.isEmpty
-      ? List<NotePreview>.of(notes)
-      : notes.where((preview) {
-          if (preview.note.title.toLowerCase().contains(q)) return true;
-          if (preview.plainText.toLowerCase().contains(q)) return true;
-          return preview.blocks.any(
-            (b) => b is! ImageBlock && b.data.toLowerCase().contains(q),
-          );
-        }).toList();
-  matches.sort((a, b) => b.note.updatedAt.compareTo(a.note.updatedAt));
-  return matches;
+
+  return Perf.measure('search.filterSort', () {
+    final matches = q.isEmpty
+        ? List<NoteListItem>.of(notes)
+        : notes.where((note) {
+            if (note.title.toLowerCase().contains(q)) return true;
+            if (note.previewText.toLowerCase().contains(q)) return true;
+            return note.topTodos.any(
+              (t) => t.text.toLowerCase().contains(q),
+            );
+          }).toList();
+
+    matches.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return matches;
+  }, count: notes.length);
 }

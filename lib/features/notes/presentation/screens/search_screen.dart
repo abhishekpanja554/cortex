@@ -6,12 +6,10 @@ import 'package:cortex/core/widgets/empty_state.dart';
 import 'package:cortex/core/widgets/page_header.dart';
 import 'package:cortex/features/app_core/presentation/notifiers/app_notifier.dart';
 import 'package:cortex/features/app_core/presentation/providers/providers.dart';
-import 'package:cortex/features/notes/domain/note_search.dart';
+import 'package:cortex/features/notes/domain/entities/note_list_item.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
-import 'package:cortex/features/notes/presentation/state/notes_state.dart';
 import 'package:cortex/features/notes/presentation/widgets/note_sliver_list.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
@@ -46,9 +44,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
 
     final hasQuery = _query.trim().isNotEmpty;
-    final results = hasQuery
-        ? searchNotes(ref.watch(noteNotifierProvider).notes, _query)
-        : const <NotePreview>[];
+    final asyncResults =
+        hasQuery ? ref.watch(searchResultsProvider(_query.trim())) : null;
+    final results = asyncResults?.asData?.value ?? const <NoteListItem>[];
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return CustomScrollView(

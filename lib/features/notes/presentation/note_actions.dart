@@ -1,5 +1,4 @@
 import 'package:cortex/core/constants/string_constants.dart';
-import 'package:cortex/features/notes/domain/entities/note_entity.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,9 +13,10 @@ class NoteActions {
   static void deleteWithUndo({
     required ProviderContainer container,
     required ScaffoldMessengerState messenger,
-    required NoteEntity note,
+    required dynamic note,
   }) {
-    container.read(noteNotifierProvider.notifier).deleteNote(note.id);
+    final String id = note is String ? note : (note as dynamic).id as String;
+    container.read(noteNotifierProvider.notifier).deleteNote(id);
 
     messenger
       ..hideCurrentSnackBar()

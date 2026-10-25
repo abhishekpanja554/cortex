@@ -2,8 +2,8 @@ import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/core/constants/dimens.dart';
 import 'package:cortex/core/navigation/note_routes.dart';
 import 'package:cortex/core/theme/app_shapes.dart';
+import 'package:cortex/features/notes/domain/entities/note_list_item.dart';
 import 'package:cortex/features/notes/presentation/note_actions.dart';
-import 'package:cortex/features/notes/presentation/state/notes_state.dart';
 import 'package:cortex/features/notes/presentation/widgets/note_list_card.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Swipe-to-delete list of note cards, shared by the Notes and Search tabs.
 class NoteSliverList extends StatelessWidget {
-  final List<NotePreview> notes;
+  final List<NoteListItem> notes;
   final String searchQuery;
 
   const NoteSliverList({super.key, required this.notes, this.searchQuery = ''});
@@ -21,8 +21,7 @@ class NoteSliverList extends StatelessWidget {
     return SliverList.builder(
       itemCount: notes.length,
       itemBuilder: (context, index) {
-        final preview = notes[index];
-        final note = preview.note;
+        final note = notes[index];
         void delete() => NoteActions.deleteWithUndo(
               container: ProviderScope.containerOf(context, listen: false),
               messenger: ScaffoldMessenger.of(context),
@@ -61,7 +60,7 @@ class NoteSliverList extends StatelessWidget {
           ),
           onDismissed: (_) => delete(),
           child: NoteListCard(
-            preview: preview,
+            preview: note,
             searchQuery: searchQuery,
             onTap: () => NoteRoutes.open(context, note.id),
             onDelete: delete,

@@ -4,8 +4,8 @@ import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/core/constants/text_styles.dart';
 import 'package:cortex/core/theme/liquid_glass.dart';
 import 'package:cortex/core/utils/date_format.dart';
-import 'package:cortex/features/notes/domain/entities/note_entity.dart';
-import 'package:cortex/features/notes/presentation/state/notes_state.dart';
+import 'package:cortex/features/notes/domain/entities/note_list_item.dart';
+import 'package:cortex/features/notes/domain/entities/note_preview_data.dart';
 import 'package:cortex/features/notes/presentation/widgets/attachment_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -15,7 +15,7 @@ import 'package:flutter/material.dart';
 /// Pure presentation: navigation and deletion are passed in as callbacks so
 /// the same card works everywhere (and in widget tests without a router).
 class NoteListCard extends StatelessWidget {
-  final NotePreview preview;
+  final NoteListItem preview;
   final String searchQuery;
   final VoidCallback? onTap;
   final VoidCallback? onDelete;
@@ -28,12 +28,13 @@ class NoteListCard extends StatelessWidget {
     this.onDelete,
   });
 
+  NoteListItem get note => preview;
+
   @override
   Widget build(BuildContext context) {
-    final note = preview.note;
-    final allTodos = preview.blocks.whereType<CheckboxBlock>().toList();
+    final note = preview;
     final todos = preview.topTodos;
-    final doneCount = allTodos.where((t) => t.isChecked).length;
+    final doneCount = todos.where((t) => t.isChecked).length;
     final coverImage = preview.firstImagePath;
     final hasTitle = note.title.trim().isNotEmpty;
 
@@ -108,24 +109,16 @@ class NoteListCard extends StatelessWidget {
                               hideWhenMissing: true,
                             ),
                           ),
-                        if (preview.plainText.isNotEmpty) ...[
+                        if (preview.previewText.isNotEmpty) ...[
                           const SizedBox(height: 2),
                           _highlight(
-                            preview.plainText,
+                            preview.previewText,
                             TextStyles.bodySecondary,
                             maxLines: todos.isEmpty ? 3 : 2,
                           ),
                           const SizedBox(height: AppSpacing.sm),
                         ],
                         ...todos.map(_buildTodoItem),
-                        if (allTodos.length > todos.length)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 30, bottom: 4),
-                            child: Text(
-                              '+${allTodos.length - todos.length} more',
-                              style: TextStyles.caption,
-                            ),
-                          ),
                         const SizedBox(height: AppSpacing.xs),
                         Row(
                           children: [
@@ -134,9 +127,9 @@ class NoteListCard extends StatelessWidget {
                               style: TextStyles.caption,
                             ),
                             const Spacer(),
-                            if (allTodos.isNotEmpty)
+                            if (todos.isNotEmpty)
                               Text(
-                                '$doneCount of ${allTodos.length} done',
+                                '$doneCount of ${todos.length} done',
                                 style: TextStyles.caption,
                               ),
                           ],
@@ -158,7 +151,7 @@ class NoteListCard extends StatelessWidget {
       context: context,
       builder: (sheetContext) => CupertinoActionSheet(
         title: Text(
-          preview.note.title.trim().isEmpty ? AppStrings.untitled : preview.note.title,
+          preview.title.trim().isEmpty ? AppStrings.untitled : preview.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -181,7 +174,7 @@ class NoteListCard extends StatelessWidget {
     );
   }
 
-  Widget _buildTodoItem(CheckboxBlock block) {
+  Widget _buildTodoItem(PreviewTodoItem block) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
@@ -196,7 +189,7 @@ class NoteListCard extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm + 2),
           Expanded(
             child: _highlight(
-              block.data,
+              block.text,
               TextStyles.bodySecondary.copyWith(
                 color: block.isChecked ? AppColors.textSecondary : AppColors.textPrimary,
                 decoration: block.isChecked ? TextDecoration.lineThrough : null,

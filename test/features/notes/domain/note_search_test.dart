@@ -8,7 +8,7 @@ NotePreview _preview(String id, {String title = '', List<Block> blocks = const [
   return NotePreview(
     note: NoteEntity(id: id, title: title, body: '', createdAt: time, updatedAt: time),
     blocks: blocks,
-    plainText: blocks.whereType<TextBlock>().map((b) => b.data).join('\n'),
+    previewText: blocks.whereType<TextBlock>().map((b) => b.data).join('\n'),
     topTodos: blocks.whereType<CheckboxBlock>().take(3).toList(),
   );
 }
@@ -21,15 +21,15 @@ void main() {
   ];
 
   test('empty query returns everything, newest first', () {
-    expect(searchNotes(notes, '  ').map((n) => n.note.id), ['b', 'c', 'a']);
+    expect(searchNotes(notes, '  ').map((n) => n.id), ['b', 'c', 'a']);
   });
 
   test('matches titles case-insensitively', () {
-    expect(searchNotes(notes, 'groc').map((n) => n.note.id), ['a']);
+    expect(searchNotes(notes, 'groc').map((n) => n.id), ['a']);
   });
 
   test('matches checklist items and text, but not image paths', () {
-    expect(searchNotes(notes, 'milk').map((n) => n.note.id), ['a']);
-    expect(searchNotes(notes, 'ui').map((n) => n.note.id), ['b']);
+    expect(searchNotes(notes, 'milk').map((n) => n.id), ['a']);
+    expect(searchNotes(notes, 'ui').map((n) => n.id), ['b']);
   });
 }

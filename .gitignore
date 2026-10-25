@@ -59,3 +59,6 @@ app.*.map.json
 
 # Scratch directory
 scratch/
+
+# Performance exports
+perf_summary.json

@@ -63,6 +63,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
 
   /// Id of the persisted note; null until a new note gets its first save.
   String? _noteId;
+  NoteEntity? _loadedNote;
   bool _createdHere = false;
   bool _savedAnything = false;
   DateTime _createdAt = DateTime.now();
@@ -79,13 +80,13 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     _titleFocus.addListener(_onFocusChanged);
 
     if (_isEditing) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final note = ref
-            .read(noteNotifierProvider.notifier)
-            .getNoteById(widget.noteId!);
-        if (note != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final note = await ref
+            .read(noteRepositoryProvider)
+            .getNote(widget.noteId!);
+        if (note != null && mounted) {
           _initFromNote(note);
-          if (mounted) setState(() {});
+          setState(() {});
         }
       });
     } else {
@@ -116,6 +117,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     if (_hasInitializedFromNote) return;
     _hasInitializedFromNote = true;
     _initializing = true;
+    _loadedNote = note;
 
     _createdAt = note.createdAt;
     _titleController.text = note.title;
@@ -290,7 +292,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
       _noteId = id;
       _createdHere = true;
     } else {
-      final existing = notifier.getNoteById(_noteId!);
+      final existing = _loadedNote;
       notifier.updateNote(
         existing != null
             ? existing.copyWith(title: title, body: body, updatedAt: now)
@@ -349,9 +351,16 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     if (confirmed != true || !mounted) return;
 
     _persist();
-    final note = _noteId == null
-        ? null
-        : ref.read(noteNotifierProvider.notifier).getNoteById(_noteId!);
+    final note = _loadedNote ??
+        (_noteId == null
+            ? null
+            : NoteEntity(
+                id: _noteId!,
+                title: _titleController.text.trim(),
+                body: _codec.serialize(_currentBlocks()),
+                createdAt: _createdAt,
+                updatedAt: DateTime.now(),
+              ));
     _closing = true;
     _debounce?.cancel();
     final messenger = ScaffoldMessenger.of(context);
@@ -577,27 +586,27 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final noteState = _noteId != null ? ref.watch(noteNotifierProvider) : null;
-    final currentNote = _noteId != null && noteState != null
-        ? noteState.notes
-            .where((n) => n.note.id == _noteId)
-            .firstOrNull
-            ?.note
+    final currentNote = _noteId != null
+        ? ref.watch(noteStreamProvider(_noteId!)).asData?.value ?? _loadedNote
         : null;
     final isConflictCopy = currentNote?.conflictOf != null;
-    final originalNote = isConflictCopy && noteState != null
-        ? noteState.notes
-            .where((n) => n.note.id == currentNote!.conflictOf)
-            .firstOrNull
-            ?.note
+    final originalNote = isConflictCopy && currentNote?.conflictOf != null
+        ? ref.watch(noteStreamProvider(currentNote!.conflictOf!)).asData?.value
         : null;
 
-    final conflictCopies = _noteId != null && !isConflictCopy && noteState != null
-        ? noteState.notes
-            .where((n) => n.note.conflictOf == _noteId)
-            .map((n) => n.note)
-            .toList()
-        : <NoteEntity>[];
+    final conflictCopyId = _noteId != null && !isConflictCopy
+        ? ref
+            .watch(noteNotifierProvider)
+            .notes
+            .where((n) => n.conflictOf == _noteId)
+            .map((n) => n.id)
+            .firstOrNull
+        : null;
+    final conflictCopy = conflictCopyId != null
+        ? ref.watch(noteStreamProvider(conflictCopyId)).asData?.value
+        : null;
+    final conflictCopies =
+        conflictCopy != null ? [conflictCopy] : <NoteEntity>[];
 
     if (_isEditing && !_hasInitializedFromNote && currentNote != null) {
       _initFromNote(currentNote);

@@ -63,6 +63,46 @@ class FakeSyncApi implements SyncApi {
   }
 }
 
+Note _testNote({
+  required String id,
+  required String title,
+  required String body,
+  required DateTime createdAt,
+  required DateTime updatedAt,
+  String? serverTitleUpdatedAt,
+  String? serverBodyUpdatedAt,
+  bool titleDirty = false,
+  bool bodyDirty = false,
+  int localRevision = 0,
+  DateTime? deletedAt,
+  String? conflictOf,
+  String? conflictField,
+  String previewText = '',
+  String? firstImagePath,
+  String previewTodos = '[]',
+}) {
+  return Note(
+    id: id,
+    title: title,
+    body: body,
+    previewText: previewText.isNotEmpty
+        ? previewText
+        : (body.length > 160 ? body.substring(0, 160) : body),
+    firstImagePath: firstImagePath,
+    previewTodos: previewTodos,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    serverTitleUpdatedAt: serverTitleUpdatedAt,
+    serverBodyUpdatedAt: serverBodyUpdatedAt,
+    titleDirty: titleDirty,
+    bodyDirty: bodyDirty,
+    localRevision: localRevision,
+    deletedAt: deletedAt,
+    conflictOf: conflictOf,
+    conflictField: conflictField,
+  );
+}
+
 void main() {
   late AppDatabase db;
   late SyncLocalStore store;
@@ -92,7 +132,7 @@ void main() {
         () async {
       final now = DateTime.now().toUtc();
       await db.into(db.notes).insert(
-            Note(
+            _testNote(
               id: '00000000-0000-0000-0000-000000000001',
               title: 'Fixture Title',
               body: 'Fixture Body',
@@ -129,7 +169,7 @@ void main() {
     test('2. Edit only the title -> the push contains no body', () async {
       final now = DateTime.now().toUtc();
       await db.into(db.notes).insert(
-            Note(
+            _testNote(
               id: '00000000-0000-0000-0000-000000000002',
               title: 'Partial Title Only',
               body: 'Unchanged Body',
@@ -168,7 +208,7 @@ void main() {
         () async {
       final now = DateTime.now().toUtc();
       await db.into(db.notes).insert(
-            Note(
+            _testNote(
               id: '00000000-0000-0000-0000-000000000001',
               title: 'Fixture Title',
               body: 'Fixture Body',
@@ -209,7 +249,7 @@ void main() {
         () async {
       final now = DateTime.now().toUtc();
       await db.into(db.notes).insert(
-            Note(
+            _testNote(
               id: '00000000-0000-0000-0000-000000000001',
               title: 'My Conflicting Title',
               body: 'Fixture Body',
@@ -240,7 +280,7 @@ void main() {
         () async {
       final now = DateTime.now().toUtc();
       await db.into(db.notes).insert(
-            Note(
+            _testNote(
               id: '00000000-0000-0000-0000-000000000001',
               title: 'Local Dirty Title',
               body: 'Local Clean Body',
@@ -281,7 +321,7 @@ void main() {
 
       // Case A: locally deleted row pushed to server (past undo window)
       await db.into(db.notes).insert(
-            Note(
+            _testNote(
               id: '00000000-0000-0000-0000-000000000001',
               title: 'To Delete',
               body: 'Body',
@@ -308,7 +348,7 @@ void main() {
 
       // Case B: clean local row that gets deleted remotely via pulled tombstone
       await db.into(db.notes).insert(
-            Note(
+            _testNote(
               id: '00000000-0000-0000-0000-000000000001',
               title: 'Clean Note',
               body: 'Body',
@@ -335,7 +375,7 @@ void main() {
         () async {
       final now = DateTime.now().toUtc();
       await db.into(db.notes).insert(
-            Note(
+            _testNote(
               id: '00000000-0000-0000-0000-000000000099',
               title: 'Just Deleted',
               body: 'Body',
@@ -399,7 +439,7 @@ void main() {
     test('8. Logout during a sync -> nothing is written after the wipe', () async {
       final now = DateTime.now().toUtc();
       await db.into(db.notes).insert(
-            Note(
+            _testNote(
               id: '00000000-0000-0000-0000-000000000001',
               title: 'Fixture Title',
               body: 'Fixture Body',
@@ -503,7 +543,7 @@ void main() {
         () async {
       final now = DateTime.now().toUtc();
       await db.into(db.notes).insert(
-            Note(
+            _testNote(
               id: '00000000-0000-0000-0000-000000000099',
               title: 'Device New Title',
               body: 'Device Conflicting Body',

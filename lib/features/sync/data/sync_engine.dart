@@ -1,4 +1,5 @@
 import 'package:clock/clock.dart';
+import 'package:cortex/core/perf/perf.dart';
 import 'package:cortex/features/sync/data/sync_api.dart';
 import 'package:cortex/features/sync/data/sync_local_store.dart';
 import 'package:cortex/features/sync/domain/sync_failure.dart';
@@ -36,7 +37,7 @@ class SyncEngine {
        _store = store,
        _getSession = getSession;
 
-  Future<SyncResult> syncOnce() async {
+Future<SyncResult> syncOnce() async {
     // Snapshot current session so we can bail out if the user logs out mid-sync
     final session = _getSession();
 
@@ -102,20 +103,27 @@ class SyncEngine {
       }
 
       if (pushList.isNotEmpty) {
-        final pushResults = await _api.push(pushList);
+        // Measure network push latency
+        final pushResults = await Perf.measureAsync('sync.push', () {
+          return _api.push(pushList);
+        }, count: pushList.length);
+        
         checkSession();
         pushedCount = pushResults.length;
 
         // 2. Apply server push responses (update stamps, clear clean flags)
-        for (final res in pushResults) {
-          checkSession();
-          final sent = sentContentMap[res.id];
-          await _store.applyPushResult(
-            res,
-            sentTitle: sent?.title,
-            sentBody: sent?.body,
-          );
-        }
+        // Measure the local SQLite write loop
+        await Perf.measureAsync('sync.applyPush', () async {
+          for (final res in pushResults) {
+            checkSession();
+            final sent = sentContentMap[res.id];
+            await _store.applyPushResult(
+              res,
+              sentTitle: sent?.title,
+              sentBody: sent?.body,
+            );
+          }
+        }, count: pushResults.length);
       }
     }
 
@@ -124,13 +132,22 @@ class SyncEngine {
     final cursor = await _store.getCursor();
     checkSession();
 
-    final pullResponse = await _api.pull(since: cursor);
+    // Measure network pull latency
+    final pullResponse = await Perf.measureAsync('sync.pull', () {
+      return _api.pull(since: cursor);
+    });
+    
     checkSession();
     pulledCount = pullResponse.notes.length;
 
-    for (final pulledNote in pullResponse.notes) {
-      checkSession();
-      await _store.applyPulledNote(pulledNote);
+    if (pullResponse.notes.isNotEmpty) {
+      // Measure the local SQLite upsert loop
+      await Perf.measureAsync('sync.applyPull', () async {
+        for (final pulledNote in pullResponse.notes) {
+          checkSession();
+          await _store.applyPulledNote(pulledNote);
+        }
+      }, count: pullResponse.notes.length);
     }
 
     // Persist latest pagination cursor

@@ -1,4 +1,5 @@
 import 'package:cortex/core/database/app_database.dart';
+import 'package:cortex/features/notes/domain/entities/note_preview_data.dart';
 import 'package:cortex/features/sync/data/sync_api.dart';
 import 'package:drift/drift.dart';
 
@@ -122,22 +123,27 @@ class SyncLocalStore {
 
       // New note: insert clean
       if (row == null) {
+        final body = note.body ?? '';
+        final preview = computePreview(body);
         await _db
             .into(_db.notes)
             .insert(
-              Note(
-                id: note.id,
-                title: note.title ?? '',
-                body: note.body ?? '',
-                createdAt: note.createdAt ?? DateTime.now().toUtc(),
-                updatedAt: note.updatedAt ?? DateTime.now().toUtc(),
-                serverTitleUpdatedAt: note.titleUpdatedAt,
-                serverBodyUpdatedAt: note.bodyUpdatedAt,
-                titleDirty: false,
-                bodyDirty: false,
-                localRevision: 0,
-                conflictOf: note.conflictOf,
-                conflictField: note.conflictField,
+              NotesCompanion.insert(
+                id: Value(note.id),
+                title: Value(note.title ?? ''),
+                body: Value(body),
+                previewText: Value(preview.previewText),
+                firstImagePath: Value(preview.firstImagePath),
+                previewTodos: Value(preview.previewTodos),
+                createdAt: Value(note.createdAt ?? DateTime.now().toUtc()),
+                updatedAt: Value(note.updatedAt ?? DateTime.now().toUtc()),
+                serverTitleUpdatedAt: Value(note.titleUpdatedAt),
+                serverBodyUpdatedAt: Value(note.bodyUpdatedAt),
+                titleDirty: const Value(false),
+                bodyDirty: const Value(false),
+                localRevision: const Value(0),
+                conflictOf: Value(note.conflictOf),
+                conflictField: Value(note.conflictField),
               ),
             );
         return;
@@ -155,11 +161,16 @@ class SyncLocalStore {
           ? row.serverBodyUpdatedAt
           : (note.bodyUpdatedAt ?? row.serverBodyUpdatedAt);
 
+      final preview = computePreview(newBody);
+
       await (_db.update(_db.notes)..where((t) => t.id.equals(note.id))).write(
         NotesCompanion(
           title: Value(newTitle),
           serverTitleUpdatedAt: Value(newServerTitleStamp),
           body: Value(newBody),
+          previewText: Value(preview.previewText),
+          firstImagePath: Value(preview.firstImagePath),
+          previewTodos: Value(preview.previewTodos),
           serverBodyUpdatedAt: Value(newServerBodyStamp),
           updatedAt: Value(note.updatedAt ?? row.updatedAt),
           conflictOf: Value(note.conflictOf ?? row.conflictOf),

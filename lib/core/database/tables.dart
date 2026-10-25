@@ -1,11 +1,16 @@
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
-@TableIndex(name: 'notes_updated_at', columns: {#updatedAt})
+@TableIndex.sql(
+  'CREATE INDEX notes_list_cover ON notes(updated_at DESC, deleted_at, id, title, preview_text, preview_todos, first_image_path, created_at, conflict_of, conflict_field);',
+)
 class Notes extends Table {
   TextColumn get id => text().clientDefault(() => const Uuid().v4())();
   TextColumn get title => text().withDefault(const Constant(''))();
   TextColumn get body => text().withDefault(const Constant(''))();
+  TextColumn get previewText => text().withDefault(const Constant(''))();
+  TextColumn get firstImagePath => text().nullable()();
+  TextColumn get previewTodos => text().withDefault(const Constant('[]'))();
   DateTimeColumn get createdAt =>
       dateTime().clientDefault(() => DateTime.now().toUtc())();
   DateTimeColumn get updatedAt =>

@@ -15,9 +15,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cortex/features/auth/presentation/auth_notifier.dart';
 import 'package:cortex/features/auth/domain/auth_state.dart';
 import 'package:cortex/features/auth/data/token_storage.dart';
+import 'package:cortex/core/perf/perf.dart';
 import 'package:cortex/core/providers/core_providers.dart';
 
 void main() async {
+  Perf.startStartupWatch();
   WidgetsFlutterBinding.ensureInitialized();
   const secureStorage = FlutterSecureStorage(
     iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),

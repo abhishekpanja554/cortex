@@ -1,4 +1,6 @@
 import 'package:cortex/core/database/tables.dart';
+import 'package:cortex/core/perf/perf.dart';
+import 'package:cortex/features/notes/domain/entities/note_preview_data.dart';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -11,7 +13,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -24,11 +26,55 @@ class AppDatabase extends _$AppDatabase {
         );
         await m.createTable(syncState);
       }
+      if (from < 3) {
+        await m.addColumn(notes, notes.previewText);
+        await m.addColumn(notes, notes.firstImagePath);
+        await m.addColumn(notes, notes.previewTodos);
+        await _backfillPreviewsV3();
+      }
+      if (from < 4) {
+        await customStatement('DROP INDEX IF EXISTS notes_updated_at;');
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS notes_list_cover ON notes(updated_at DESC, deleted_at, id, title, preview_text, preview_todos, first_image_path, created_at, conflict_of, conflict_field);',
+        );
+      }
     },
     onCreate: (m) async {
       await m.createAll();
     },
   );
+
+  Future<void> _backfillPreviewsV3() async {
+    await Perf.measureAsync('migration.v2ToV3', () async {
+      const batchSize = 500;
+      var offset = 0;
+      while (true) {
+        final rows = await (select(notes)
+              ..orderBy([(t) => OrderingTerm(expression: t.id)])
+              ..limit(batchSize, offset: offset))
+            .get();
+        if (rows.isEmpty) break;
+
+        await batch((b) {
+          for (final row in rows) {
+            final preview = computePreview(row.body);
+            b.update(
+              notes,
+              NotesCompanion(
+                previewText: Value(preview.previewText),
+                firstImagePath: Value(preview.firstImagePath),
+                previewTodos: Value(preview.previewTodos),
+              ),
+              where: (t) => t.id.equals(row.id),
+            );
+          }
+        });
+
+        if (rows.length < batchSize) break;
+        offset += batchSize;
+      }
+    });
+  }
 }
 
 QueryExecutor openEncryptedConnection(String hexKey) {

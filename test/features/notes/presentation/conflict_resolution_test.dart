@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cortex/features/notes/domain/entities/note_entity.dart';
+import 'package:cortex/features/notes/domain/entities/note_list_item.dart';
 import 'package:cortex/features/notes/domain/repositories/note_repository.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:cortex/features/notes/presentation/screens/edit_note_screen.dart';
@@ -49,7 +50,7 @@ void main() {
       final preview = NotePreview(
         note: conflictNote,
         blocks: const [],
-        plainText: 'Conflicted Body',
+        previewText: 'Conflicted Body',
         firstImagePath: null,
         topTodos: const [],
       );
@@ -80,7 +81,7 @@ void main() {
       final preview = NotePreview(
         note: normalNote,
         blocks: const [],
-        plainText: 'Normal Body',
+        previewText: 'Normal Body',
         firstImagePath: null,
         topTodos: const [],
       );
@@ -98,7 +99,7 @@ void main() {
   });
 
   group('EditNoteScreen conflict resolution', () {
-    late StreamController<List<NoteEntity>> notesStream;
+    late StreamController<List<NoteListItem>> notesStream;
     late NoteEntity origNote;
     late NoteEntity copyNote;
 
@@ -122,9 +123,13 @@ void main() {
         conflictField: 'body',
       );
 
-      notesStream = StreamController<List<NoteEntity>>.broadcast();
-      when(() => mockRepository.watchAllNotes())
-          .thenAnswer((_) => Stream.value([origNote, copyNote]));
+      notesStream = StreamController<List<NoteListItem>>.broadcast();
+      when(() => mockRepository.watchAllNotes()).thenAnswer((_) =>
+          Stream.value([NotePreview(note: origNote), NotePreview(note: copyNote)]));
+      when(() => mockRepository.getNote('copy-456')).thenAnswer((_) async => copyNote);
+      when(() => mockRepository.getNote('orig-123')).thenAnswer((_) async => origNote);
+      when(() => mockRepository.watchNote('copy-456')).thenAnswer((_) => Stream.value(copyNote));
+      when(() => mockRepository.watchNote('orig-123')).thenAnswer((_) => Stream.value(origNote));
       when(() => mockRepository.saveNote(any())).thenAnswer((_) async {});
       when(() => mockRepository.deleteNote(any())).thenAnswer((_) async {});
     });
@@ -147,7 +152,7 @@ void main() {
         ),
       );
 
-      notesStream.add([origNote, copyNote]);
+      notesStream.add([NotePreview(note: origNote), NotePreview(note: copyNote)]);
       await tester.pumpAndSettle();
 
       expect(find.text('Conflict Copy'), findsWidgets);
@@ -171,7 +176,7 @@ void main() {
         ),
       );
 
-      notesStream.add([origNote, copyNote]);
+      notesStream.add([NotePreview(note: origNote), NotePreview(note: copyNote)]);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Compare'));
@@ -199,7 +204,7 @@ void main() {
         ),
       );
 
-      notesStream.add([origNote, copyNote]);
+      notesStream.add([NotePreview(note: origNote), NotePreview(note: copyNote)]);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Keep Original'));
@@ -224,7 +229,7 @@ void main() {
         ),
       );
 
-      notesStream.add([origNote, copyNote]);
+      notesStream.add([NotePreview(note: origNote), NotePreview(note: copyNote)]);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Keep Copy'));
@@ -248,7 +253,9 @@ void main() {
         'Keep Copy when original is missing saves copy content as a new note, deletes copy, and syncs',
         (tester) async {
       when(() => mockRepository.watchAllNotes())
-          .thenAnswer((_) => Stream.value([copyNote])); // origNote is missing!
+          .thenAnswer((_) => Stream.value([NotePreview(note: copyNote)])); // origNote is missing!
+      when(() => mockRepository.getNote('orig-123')).thenAnswer((_) async => null);
+      when(() => mockRepository.watchNote('orig-123')).thenAnswer((_) => Stream.value(null));
 
       await tester.pumpWidget(
         ProviderScope(
@@ -262,7 +269,7 @@ void main() {
         ),
       );
 
-      notesStream.add([copyNote]);
+      notesStream.add([NotePreview(note: copyNote)]);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Keep Copy'));

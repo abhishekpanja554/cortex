@@ -1,22 +1,63 @@
 import 'package:cortex/features/notes/domain/entities/note_entity.dart';
+import 'package:cortex/features/notes/domain/entities/note_list_item.dart';
+import 'package:cortex/features/notes/domain/entities/note_preview_data.dart';
 
-class NotePreview {
-  final NoteEntity note;
+class NotePreview extends NoteListItem {
   final List<Block> blocks;
-  final String plainText;
-  final String? firstImagePath;
-  final List<CheckboxBlock> topTodos;
 
-  const NotePreview({
-    required this.note,
-    required this.blocks,
-    required this.plainText,
-    this.firstImagePath,
-    required this.topTodos,
-  });
+  NotePreview({
+    NoteEntity? note,
+    String? id,
+    String? title,
+    String? previewText,
+    String? plainText,
+    String? firstImagePath,
+    String? previewTodos,
+    List<dynamic>? topTodos,
+    super.rawCreatedAt,
+    super.rawUpdatedAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? conflictOf,
+    String? conflictField,
+    this.blocks = const [],
+  }) : super(
+          id: id ?? note?.id ?? '',
+          title: title ?? note?.title ?? '',
+          previewText: previewText ??
+              plainText ??
+              (blocks.isNotEmpty
+                  ? blocks.whereType<TextBlock>().map((b) => b.data).join('\n')
+                  : note?.title ?? ''),
+          firstImagePath: firstImagePath ??
+              (blocks.isNotEmpty
+                  ? blocks.whereType<ImageBlock>().firstOrNull?.data
+                  : null),
+          previewTodos: previewTodos ?? '[]',
+          topTodos: topTodos != null
+              ? topTodos.map((t) {
+                  if (t is PreviewTodoItem) return t;
+                  if (t is CheckboxBlock) {
+                    return PreviewTodoItem(text: t.data, isChecked: t.isChecked);
+                  }
+                  return PreviewTodoItem(text: t.toString(), isChecked: false);
+                }).toList()
+              : (blocks.isNotEmpty
+                  ? blocks
+                      .whereType<CheckboxBlock>()
+                      .take(3)
+                      .map((b) =>
+                          PreviewTodoItem(text: b.data, isChecked: b.isChecked))
+                      .toList()
+                  : null),
+          createdAt: createdAt ?? note?.createdAt,
+          updatedAt: updatedAt ?? note?.updatedAt,
+          conflictOf: conflictOf ?? note?.conflictOf,
+          conflictField: conflictField ?? note?.conflictField,
+        );
 }
 
 class NotesState {
-  final List<NotePreview> notes;
+  final List<NoteListItem> notes;
   const NotesState({required this.notes});
 }

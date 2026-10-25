@@ -80,7 +80,7 @@ class _FakeNoteNotifier extends NoteNotifier {
       return NotePreview(
         note: n,
         blocks: const [],
-        plainText: n.body,
+        previewText: n.body,
         topTodos: const [],
       );
     }).toList();
