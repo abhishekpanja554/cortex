@@ -23,8 +23,6 @@ class AgentApprovalCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final noteNotifier = ref.watch(noteNotifierProvider.notifier);
-
     return Container(
       key: const ValueKey('agent_approval_card'),
       margin: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -50,7 +48,7 @@ class AgentApprovalCard extends ConsumerWidget {
         children: [
           _buildHeader(),
           const SizedBox(height: AppSpacing.sm),
-          _buildContent(noteNotifier),
+          _buildContent(),
           const SizedBox(height: AppSpacing.md),
           _buildFooter(),
         ],
@@ -197,7 +195,7 @@ class AgentApprovalCard extends ConsumerWidget {
     }
   }
 
-  Widget _buildContent(dynamic noteNotifier) {
+  Widget _buildContent() {
     final tool = confirmation.tool;
     final args = confirmation.args;
 
@@ -215,157 +213,18 @@ class AgentApprovalCard extends ConsumerWidget {
             style: TextStyles.bodySecondary.copyWith(fontSize: 13),
           ),
           const SizedBox(height: AppSpacing.xs),
-          for (final id in noteIds) ...[
-            Builder(builder: (context) {
-              final note = noteNotifier.getNoteById(id);
-              final hasLocalNote = note != null;
-              final title = hasLocalNote
-                  ? (note.title.isNotEmpty ? note.title : 'Untitled note')
-                  : 'not on this device';
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  children: [
-                    Icon(
-                      hasLocalNote
-                          ? CupertinoIcons.doc_text
-                          : CupertinoIcons.question_circle,
-                      size: 13,
-                      color: hasLocalNote
-                          ? AppColors.textSecondary
-                          : AppColors.warning,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: TextStyles.body.copyWith(
-                          fontSize: 13,
-                          fontWeight:
-                              hasLocalNote ? FontWeight.w600 : FontWeight.w400,
-                          color: hasLocalNote
-                              ? AppColors.textPrimary
-                              : AppColors.textSecondary,
-                          fontStyle: hasLocalNote
-                              ? FontStyle.normal
-                              : FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
+          for (final id in noteIds) _NoteTitleRow(noteId: id),
         ],
       );
     } else if (tool == 'delete_note') {
       final noteId = args['note_id']?.toString() ?? '';
-      final note = noteNotifier.getNoteById(noteId);
-      final hasLocalNote = note != null;
-      final title = hasLocalNote
-          ? (note.title.isNotEmpty ? note.title : 'Untitled note')
-          : 'not on this device';
-
-      return Row(
-        children: [
-          Icon(
-            hasLocalNote
-                ? CupertinoIcons.doc_text
-                : CupertinoIcons.question_circle,
-            size: 14,
-            color: hasLocalNote ? AppColors.textSecondary : AppColors.warning,
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              title,
-              style: TextStyles.body.copyWith(
-                fontSize: 13,
-                fontWeight: hasLocalNote ? FontWeight.w600 : FontWeight.w400,
-                color: hasLocalNote
-                    ? AppColors.textPrimary
-                    : AppColors.textSecondary,
-                fontStyle:
-                    hasLocalNote ? FontStyle.normal : FontStyle.italic,
-              ),
-            ),
-          ),
-        ],
-      );
+      return _DeleteNoteContent(noteId: noteId);
     } else if (tool == 'update_note') {
       final noteId = args['note_id']?.toString() ?? '';
       final proposedBody = args['body']?.toString() ?? '';
-      final note = noteNotifier.getNoteById(noteId);
-
-      if (note == null) {
-        return Text(
-          'Note is not on this device.',
-          style: TextStyles.bodySecondary.copyWith(
-            fontStyle: FontStyle.italic,
-            fontSize: 13,
-          ),
-        );
-      }
-
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            note.title.isNotEmpty ? note.title : 'Untitled Note',
-            style: TextStyles.body.copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceMuted,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Current content:',
-                  style: TextStyles.caption.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  note.body.isNotEmpty ? note.body : '(empty)',
-                  style: TextStyles.caption.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const Divider(height: 12, thickness: 0.5),
-                Text(
-                  'Proposed content:',
-                  style: TextStyles.caption.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  proposedBody.isNotEmpty ? proposedBody : '(empty)',
-                  style: TextStyles.caption.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
+      return _UpdateNoteContent(
+        noteId: noteId,
+        proposedBody: proposedBody,
       );
     }
 
@@ -495,6 +354,199 @@ class AgentApprovalCard extends ConsumerWidget {
               ),
             ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+class _NoteTitleRow extends ConsumerWidget {
+  final String noteId;
+
+  const _NoteTitleRow({required this.noteId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final noteAsync = ref.watch(noteByIdProvider(noteId));
+    final localItem = ref.watch(noteNotifierProvider.notifier).getNoteById(noteId);
+
+    final note = noteAsync.asData?.value;
+    final hasLocalNote = noteAsync.hasValue ? (note != null) : localItem != null;
+    final title = hasLocalNote
+        ? (note != null
+            ? (note.title.isNotEmpty ? note.title : 'Untitled note')
+            : (localItem != null && localItem.title.isNotEmpty
+                ? localItem.title
+                : 'Untitled note'))
+        : (noteAsync.isLoading ? '' : 'not on this device');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Icon(
+            hasLocalNote
+                ? CupertinoIcons.doc_text
+                : CupertinoIcons.question_circle,
+            size: 13,
+            color: hasLocalNote
+                ? AppColors.textSecondary
+                : AppColors.warning,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyles.body.copyWith(
+                fontSize: 13,
+                fontWeight: hasLocalNote ? FontWeight.w600 : FontWeight.w400,
+                color: hasLocalNote
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+                fontStyle: hasLocalNote ? FontStyle.normal : FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeleteNoteContent extends ConsumerWidget {
+  final String noteId;
+
+  const _DeleteNoteContent({required this.noteId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final noteAsync = ref.watch(noteByIdProvider(noteId));
+    final localItem = ref.watch(noteNotifierProvider.notifier).getNoteById(noteId);
+
+    final note = noteAsync.asData?.value;
+    final hasLocalNote = noteAsync.hasValue ? (note != null) : localItem != null;
+    final title = hasLocalNote
+        ? (note != null
+            ? (note.title.isNotEmpty ? note.title : 'Untitled note')
+            : (localItem != null && localItem.title.isNotEmpty
+                ? localItem.title
+                : 'Untitled note'))
+        : (noteAsync.isLoading ? '' : 'not on this device');
+
+    return Row(
+      children: [
+        Icon(
+          hasLocalNote
+              ? CupertinoIcons.doc_text
+              : CupertinoIcons.question_circle,
+          size: 14,
+          color: hasLocalNote ? AppColors.textSecondary : AppColors.warning,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyles.body.copyWith(
+              fontSize: 13,
+              fontWeight: hasLocalNote ? FontWeight.w600 : FontWeight.w400,
+              color: hasLocalNote
+                  ? AppColors.textPrimary
+                  : AppColors.textSecondary,
+              fontStyle: hasLocalNote ? FontStyle.normal : FontStyle.italic,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _UpdateNoteContent extends ConsumerWidget {
+  final String noteId;
+  final String proposedBody;
+
+  const _UpdateNoteContent({
+    required this.noteId,
+    required this.proposedBody,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final noteAsync = ref.watch(noteByIdProvider(noteId));
+
+    if (noteAsync.isLoading && !noteAsync.hasValue) {
+      return const SizedBox(
+        height: 20,
+        child: CupertinoActivityIndicator(radius: 6),
+      );
+    }
+
+    final note = noteAsync.asData?.value;
+    if (note == null) {
+      return Text(
+        'Note is not on this device.',
+        style: TextStyles.bodySecondary.copyWith(
+          fontStyle: FontStyle.italic,
+          fontSize: 13,
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          note.title.isNotEmpty ? note.title : 'Untitled Note',
+          style: TextStyles.body.copyWith(
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceMuted,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Current content:',
+                style: TextStyles.caption.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                note.body.isNotEmpty ? note.body : '(empty)',
+                style: TextStyles.caption.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const Divider(height: 12, thickness: 0.5),
+              Text(
+                'Proposed content:',
+                style: TextStyles.caption.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                proposedBody.isNotEmpty ? proposedBody : '(empty)',
+                style: TextStyles.caption.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ],
     );

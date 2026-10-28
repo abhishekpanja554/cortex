@@ -6,7 +6,6 @@ import 'package:cortex/core/widgets/empty_state.dart';
 import 'package:cortex/core/widgets/page_header.dart';
 import 'package:cortex/features/app_core/presentation/notifiers/app_notifier.dart';
 import 'package:cortex/features/app_core/presentation/providers/providers.dart';
-import 'package:cortex/features/notes/domain/entities/note_list_item.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:cortex/features/notes/presentation/widgets/note_sliver_list.dart';
 import 'package:flutter/cupertino.dart';
@@ -22,7 +21,6 @@ class SearchScreen extends ConsumerStatefulWidget {
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
-  String _query = '';
 
   @override
   void dispose() {
@@ -43,10 +41,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       }
     });
 
-    final hasQuery = _query.trim().isNotEmpty;
-    final asyncResults =
-        hasQuery ? ref.watch(searchResultsProvider(_query.trim())) : null;
-    final results = asyncResults?.asData?.value ?? const <NoteListItem>[];
+    final searchState = ref.watch(searchNotifierProvider);
+    final query = searchState.query;
+    final hasQuery = query.trim().isNotEmpty;
+    final results = searchState.results;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return CustomScrollView(
@@ -65,10 +63,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               controller: _controller,
               focusNode: _focusNode,
               placeholder: AppStrings.searchHint,
-              onChanged: (value) => setState(() => _query = value),
+              onChanged: (value) =>
+                  ref.read(searchNotifierProvider.notifier).onQueryChanged(value),
               onSuffixTap: () {
                 _controller.clear();
-                setState(() => _query = '');
+                ref.read(searchNotifierProvider.notifier).clear();
               },
               style: TextStyles.body,
               placeholderStyle: TextStyles.hint,
@@ -90,11 +89,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           )
         else if (results.isEmpty)
           SliverToBoxAdapter(
-            child: EmptyState(
-              icon: CupertinoIcons.search,
-              title: AppStrings.searchNoResults,
-              message: 'Nothing matches “${_query.trim()}”.',
-            ),
+            child: searchState.isLoading
+                ? const Padding(
+                    padding: EdgeInsets.all(AppSpacing.xxl),
+                    child: Center(child: CupertinoActivityIndicator()),
+                  )
+                : EmptyState(
+                    icon: CupertinoIcons.search,
+                    title: AppStrings.searchNoResults,
+                    message: 'Nothing matches “${query.trim()}”.',
+                  ),
           )
         else ...[
           SliverToBoxAdapter(
@@ -111,7 +115,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ),
           ),
-          NoteSliverList(notes: results, searchQuery: _query),
+          NoteSliverList(notes: results, searchQuery: query),
         ],
         SliverPadding(padding: EdgeInsets.only(bottom: bottomInset + AppSpacing.lg)),
       ],

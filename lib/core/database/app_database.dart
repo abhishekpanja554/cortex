@@ -13,7 +13,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -36,6 +36,11 @@ class AppDatabase extends _$AppDatabase {
         await customStatement('DROP INDEX IF EXISTS notes_updated_at;');
         await customStatement(
           'CREATE INDEX IF NOT EXISTS notes_list_cover ON notes(updated_at DESC, deleted_at, id, title, preview_text, preview_todos, first_image_path, created_at, conflict_of, conflict_field);',
+        );
+      }
+      if (from < 5) {
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS notes_conflict_of ON notes(conflict_of) WHERE conflict_of IS NOT NULL;',
         );
       }
     },

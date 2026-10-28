@@ -4,6 +4,9 @@ import 'package:uuid/uuid.dart';
 @TableIndex.sql(
   'CREATE INDEX notes_list_cover ON notes(updated_at DESC, deleted_at, id, title, preview_text, preview_todos, first_image_path, created_at, conflict_of, conflict_field);',
 )
+@TableIndex.sql(
+  'CREATE INDEX notes_conflict_of ON notes(conflict_of) WHERE conflict_of IS NOT NULL;',
+)
 class Notes extends Table {
   TextColumn get id => text().clientDefault(() => const Uuid().v4())();
   TextColumn get title => text().withDefault(const Constant(''))();

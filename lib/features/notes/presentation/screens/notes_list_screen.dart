@@ -19,8 +19,9 @@ class NotesListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final notes = ref.watch(noteNotifierProvider).notes;
-    final count = notes.length;
+    final notesState = ref.watch(noteNotifierProvider);
+    final notes = notesState.notes;
+    final totalCount = notesState.totalCount;
     // With extendBody, the Scaffold reports the floating tab bar's height here.
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
@@ -79,9 +80,9 @@ class NotesListScreen extends ConsumerWidget {
         SliverToBoxAdapter(
           child: SectionLabel(
             AppStrings.recentNotes,
-            trailing: count == 0
+            trailing: totalCount == 0
                 ? null
-                : Text(count == 1 ? '1 note' : '$count notes', style: TextStyles.caption),
+                : Text(totalCount == 1 ? '1 note' : '$totalCount notes', style: TextStyles.caption),
           ),
         ),
         if (notes.isEmpty)
@@ -93,7 +94,10 @@ class NotesListScreen extends ConsumerWidget {
             ),
           )
         else
-          NoteSliverList(notes: notes),
+          NoteSliverList(
+            notes: notes,
+            onLoadMore: () => ref.read(noteNotifierProvider.notifier).loadMore(),
+          ),
         SliverPadding(
           padding: EdgeInsets.only(bottom: bottomInset + AppSpacing.lg),
         ),

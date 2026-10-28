@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cortex/core/perf/perf.dart';
 import 'package:cortex/features/notes/domain/entities/note_entity.dart';
 import 'package:cortex/features/notes/domain/entities/note_list_item.dart';
+import 'package:cortex/features/notes/domain/repositories/note_repository.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:cortex/features/notes/presentation/state/notes_state.dart';
 import 'package:cortex/features/sync/data/sync_scheduler.dart';
@@ -10,29 +11,46 @@ import 'package:cortex/features/sync/presentation/sync_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class NoteNotifier extends Notifier<NotesState> {
-  StreamSubscription<List<NoteListItem>>? _subscription;
+  StreamSubscription<List<NoteListItem>>? _notesSubscription;
+  StreamSubscription<int>? _countSubscription;
   Stopwatch? _saveToEmissionTimer;
 
   bool _disposed = false;
   int _latestUpdateId = 0;
   Future<void> _updateChain = Future.value();
+  int _limit = 100;
+  int _totalCount = 0;
 
   @override
   NotesState build() {
     _disposed = false;
+    _limit = 100;
+    _totalCount = 0;
     ref.onDispose(() {
       _disposed = true;
-      _subscription?.cancel();
+      _notesSubscription?.cancel();
+      _countSubscription?.cancel();
     });
-    _initSubscription();
-    return const NotesState(notes: []);
+    _initSubscriptions();
+    return NotesState(notes: const [], totalCount: 0, limit: _limit);
   }
 
-  void _initSubscription() {
+  void _initSubscriptions() {
     final repo = ref.watch(noteRepositoryProvider);
-    _subscription?.cancel();
+    _countSubscription?.cancel();
+    _countSubscription = repo.watchNoteCount().listen((count) {
+      if (_disposed) return;
+      _totalCount = count;
+      state = state.copyWith(totalCount: count);
+    });
 
-    _subscription = repo.watchAllNotes().listen((items) {
+    _restartNotesWatch(repo);
+  }
+
+  void _restartNotesWatch([NoteRepository? repo]) {
+    final NoteRepository r = repo ?? ref.read(noteRepositoryProvider);
+    _notesSubscription?.cancel();
+    _notesSubscription = r.watchAllNotes(limit: _limit).listen((items) {
       final updateId = ++_latestUpdateId;
 
       _updateChain = _updateChain.catchError((_) {}).then((_) async {
@@ -44,6 +62,13 @@ class NoteNotifier extends Notifier<NotesState> {
     });
   }
 
+  void loadMore() {
+    if (state.notes.length >= _totalCount && _totalCount > 0) return;
+    _limit += 100;
+    state = state.copyWith(limit: _limit);
+    _restartNotesWatch();
+  }
+
   Future<void> _handleEmission(List<NoteListItem> items, int updateId) async {
     if (_saveToEmissionTimer != null && _saveToEmissionTimer!.isRunning) {
       _saveToEmissionTimer!.stop();
@@ -51,7 +76,7 @@ class NoteNotifier extends Notifier<NotesState> {
       _saveToEmissionTimer = null;
     }
 
-    state = NotesState(notes: items);
+    state = state.copyWith(notes: items, totalCount: _totalCount, limit: _limit);
     Perf.markFirstListHandled();
   }
 
@@ -65,21 +90,12 @@ class NoteNotifier extends Notifier<NotesState> {
     ref.read(noteRepositoryProvider).saveNote(updatedNote);
   }
 
-  NoteEntity? getNoteById(String id) {
-    try {
-      final item = state.notes.firstWhere((n) => n.id == id);
-      return NoteEntity(
-        id: item.id,
-        title: item.title,
-        body: '',
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-        conflictOf: item.conflictOf,
-        conflictField: item.conflictField,
-      );
-    } catch (_) {
-      return null;
-    }
+  Future<NoteEntity?> getNote(String id) {
+    return ref.read(noteRepositoryProvider).getNote(id);
+  }
+
+  NoteListItem? getNoteById(String id) {
+    return state.notes.where((n) => n.id == id).firstOrNull;
   }
 
   Future<void> deleteNote(String id) async {

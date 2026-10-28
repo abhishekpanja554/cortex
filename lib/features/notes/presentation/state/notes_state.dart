@@ -59,5 +59,26 @@ class NotePreview extends NoteListItem {
 
 class NotesState {
   final List<NoteListItem> notes;
-  const NotesState({required this.notes});
+  final int totalCount;
+  final int limit;
+
+  const NotesState({
+    required this.notes,
+    this.totalCount = 0,
+    this.limit = 100,
+  });
+
+  bool get hasMore => notes.length < totalCount;
+
+  NotesState copyWith({
+    List<NoteListItem>? notes,
+    int? totalCount,
+    int? limit,
+  }) {
+    return NotesState(
+      notes: notes ?? this.notes,
+      totalCount: totalCount ?? this.totalCount,
+      limit: limit ?? this.limit,
+    );
+  }
 }

@@ -40,7 +40,8 @@ void main() {
 
     when(() => mockSecurityService.isPrivateModeEnabled).thenAnswer((_) async => false);
     when(() => mockSecurityService.hasAppPin).thenAnswer((_) async => false);
-    when(() => mockNoteRepository.watchAllNotes()).thenAnswer((_) => Stream.value([]));
+    when(() => mockNoteRepository.watchAllNotes(limit: any(named: 'limit'))).thenAnswer((_) => Stream.value([]));
+    when(() => mockNoteRepository.watchNoteCount()).thenAnswer((_) => Stream.value(0));
     when(() => mockNoteRepository.unsyncedCount()).thenAnswer((_) async => 0);
     when(() => mockSyncScheduler.requestSync()).thenReturn(null);
 

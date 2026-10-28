@@ -28,7 +28,8 @@ void main() {
     mockRepository = MockNoteRepository();
     mockSyncScheduler = MockSyncScheduler();
     when(() => mockSyncScheduler.requestSync()).thenReturn(null);
-    when(() => mockRepository.watchAllNotes()).thenAnswer((_) => Stream.value([]));
+    when(() => mockRepository.watchAllNotes(limit: any(named: 'limit'))).thenAnswer((_) => Stream.value([]));
+    when(() => mockRepository.watchNoteCount()).thenAnswer((_) => Stream.value(0));
     when(() => mockRepository.deleteNote(any())).thenAnswer((_) async {});
     when(() => mockRepository.restoreNote(any())).thenAnswer((_) async {});
   });

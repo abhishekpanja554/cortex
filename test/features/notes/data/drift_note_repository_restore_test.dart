@@ -43,7 +43,7 @@ void main() {
       expect(row.titleDirty, isTrue);
       expect(row.bodyDirty, isTrue);
 
-      final visible = await repository.watchAllNotes().first;
+      final visible = await repository.watchAllNotes(limit: 100).first;
       expect(visible.any((n) => n.id == 'test-note-1'), isFalse);
     });
 
@@ -70,7 +70,7 @@ void main() {
       expect(row.titleDirty, isTrue);
       expect(row.bodyDirty, isTrue);
 
-      final visible = await repository.watchAllNotes().first;
+      final visible = await repository.watchAllNotes(limit: 100).first;
       expect(visible.any((n) => n.id == 'test-note-2'), isTrue);
       expect(visible.firstWhere((n) => n.id == 'test-note-2').title, 'Will Restore');
     });

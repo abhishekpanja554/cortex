@@ -11,6 +11,7 @@ import 'package:cortex/features/chat/presentation/providers/agent_providers.dart
 import 'package:cortex/features/chat/presentation/state/agent_state.dart';
 import 'package:cortex/features/chat/presentation/widgets/agent_turn_bubble.dart';
 import 'package:cortex/features/notes/domain/entities/note_entity.dart';
+import 'package:cortex/features/notes/domain/entities/note_list_item.dart';
 import 'package:cortex/features/notes/presentation/notifiers/note_notifier.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:cortex/features/notes/presentation/state/notes_state.dart';
@@ -72,6 +73,7 @@ class _FakeSyncScheduler extends Fake implements SyncScheduler {
 
 class _FakeNoteNotifier extends NoteNotifier {
   final List<NoteEntity> _notes;
+  int getNoteCallCount = 0;
   _FakeNoteNotifier(this._notes);
 
   @override
@@ -88,8 +90,14 @@ class _FakeNoteNotifier extends NoteNotifier {
   }
 
   @override
-  NoteEntity? getNoteById(String id) {
+  Future<NoteEntity?> getNote(String id) async {
+    getNoteCallCount++;
     return _notes.where((n) => n.id == id).firstOrNull;
+  }
+
+  @override
+  NoteListItem? getNoteById(String id) {
+    return state.notes.where((n) => n.id == id).firstOrNull;
   }
 }
 
@@ -873,6 +881,66 @@ void main() {
 
         expect(find.text('I created the note "Grocery List" for you.'), findsOneWidget);
         expect(fakeSyncScheduler.requestSyncCalled, isTrue);
+      },
+    );
+
+    testWidgets(
+      'Rebuilding AgentApprovalCard caches getNote query and does not re-query on every rebuild',
+      (tester) async {
+        final existingNote = NoteEntity(
+          id: 'note-cached-1',
+          title: 'Cached Title',
+          body: 'Cached Body',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        final fakeNotifier = _FakeNoteNotifier([existingNote]);
+        final container = ProviderContainer(
+          overrides: [
+            authProvider.overrideWith(() => _FakeAuthNotifier()),
+            sseClientProvider.overrideWithValue(fakeSseClient),
+            syncSchedulerProvider.overrideWithValue(fakeSyncScheduler),
+            noteNotifierProvider.overrideWith(() => fakeNotifier),
+          ],
+        );
+
+        final agentNotifier = container.read(agentNotifierProvider.notifier);
+        const confirmation = AgentConfirmation(
+          confirmationId: 'conf-cache-1',
+          tool: 'delete_note',
+          args: {'note_id': 'note-cached-1'},
+          resolution: ConfirmationResolution.pending,
+        );
+
+        final turn = const AgentTurn(
+          id: 'turn-cache',
+          query: 'Delete cached note',
+          confirmation: confirmation,
+          status: AgentTurnStatus.awaitingConfirmation,
+        );
+
+        agentNotifier.state = AgentState(turns: [turn]);
+
+        await tester.pumpWidget(
+          buildAgentWidget(container: container, turnId: 'turn-cache'),
+        );
+        await tester.pump();
+
+        expect(find.text('Cached Title'), findsOneWidget);
+        final initialQueries = fakeNotifier.getNoteCallCount;
+        expect(initialQueries, greaterThanOrEqualTo(1));
+
+        // Trigger multiple rebuilds
+        for (int i = 0; i < 5; i++) {
+          await tester.pumpWidget(
+            buildAgentWidget(container: container, turnId: 'turn-cache'),
+          );
+          await tester.pump();
+        }
+
+        // Must still have the exact same number of getNote calls, not 1 per rebuild!
+        expect(fakeNotifier.getNoteCallCount, equals(initialQueries));
       },
     );
   });

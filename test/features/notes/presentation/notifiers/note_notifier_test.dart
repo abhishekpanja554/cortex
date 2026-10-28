@@ -43,8 +43,11 @@ void main() {
     mockRepository = MockNoteRepository();
     mockScheduler = MockSyncScheduler();
     when(
-      () => mockRepository.watchAllNotes(),
+      () => mockRepository.watchAllNotes(limit: any(named: 'limit')),
     ).thenAnswer((_) => Stream.value([]));
+    when(
+      () => mockRepository.watchNoteCount(),
+    ).thenAnswer((_) => Stream.value(0));
     when(() => mockScheduler.requestSync(any())).thenReturn(null);
 
     container = ProviderContainer(
@@ -60,17 +63,20 @@ void main() {
     container.dispose();
   });
 
-  test('initial state should be empty and watchAllNotes should be called', () {
+  test('initial state should be empty and watchAllNotes should be called with limit 100', () {
     final state = container.read(noteNotifierProvider);
     expect(state.notes, isEmpty);
-    verify(() => mockRepository.watchAllNotes()).called(1);
+    expect(state.limit, 100);
+    expect(state.totalCount, 0);
+    verify(() => mockRepository.watchAllNotes(limit: 100)).called(1);
+    verify(() => mockRepository.watchNoteCount()).called(1);
   });
 
   test('state updates when repository stream emits new items', () async {
     final controller = StreamController<List<NoteListItem>>();
 
     when(
-      () => mockRepository.watchAllNotes(),
+      () => mockRepository.watchAllNotes(limit: any(named: 'limit')),
     ).thenAnswer((_) => controller.stream);
 
     final item = _testItem('1', title: 'Test Note', preview: 'Test Content');
@@ -84,6 +90,86 @@ void main() {
     expect(state.notes.first.previewText, 'Test Content');
 
     await controller.close();
+  });
+
+  test('watchNoteCount updates totalCount in state', () async {
+    final countController = StreamController<int>();
+    when(
+      () => mockRepository.watchNoteCount(),
+    ).thenAnswer((_) => countController.stream);
+
+    container = ProviderContainer(
+      overrides: [
+        noteRepositoryProvider.overrideWithValue(mockRepository),
+        syncSchedulerProvider.overrideWithValue(mockScheduler),
+      ],
+    );
+    container.listen(noteNotifierProvider, (_, __) {});
+
+    countController.add(250);
+    await Future.delayed(Duration.zero);
+
+    final state = container.read(noteNotifierProvider);
+    expect(state.totalCount, 250);
+    expect(state.hasMore, isTrue);
+
+    await countController.close();
+  });
+
+  test('loadMore increases limit by 100 and restarts watch with new limit', () async {
+    final countController = StreamController<int>.broadcast();
+    final notesController1 = StreamController<List<NoteListItem>>.broadcast();
+    final notesController2 = StreamController<List<NoteListItem>>.broadcast();
+
+    when(
+      () => mockRepository.watchNoteCount(),
+    ).thenAnswer((_) => countController.stream);
+
+    when(
+      () => mockRepository.watchAllNotes(limit: 100),
+    ).thenAnswer((_) => notesController1.stream);
+
+    when(
+      () => mockRepository.watchAllNotes(limit: 200),
+    ).thenAnswer((_) => notesController2.stream);
+
+    container = ProviderContainer(
+      overrides: [
+        noteRepositoryProvider.overrideWithValue(mockRepository),
+        syncSchedulerProvider.overrideWithValue(mockScheduler),
+      ],
+    );
+    container.listen(noteNotifierProvider, (_, __) {});
+
+    countController.add(250);
+    await Future.delayed(Duration.zero);
+
+    final notifier = container.read(noteNotifierProvider.notifier);
+    expect(container.read(noteNotifierProvider).limit, 100);
+
+    notifier.loadMore();
+
+    expect(container.read(noteNotifierProvider).limit, 200);
+    verify(() => mockRepository.watchAllNotes(limit: 200)).called(1);
+
+    await countController.close();
+    await notesController1.close();
+    await notesController2.close();
+  });
+
+  test('getNote delegates to repository getNote', () async {
+    final expectedNote = NoteEntity(
+      id: 'repo-note-1',
+      title: 'Repo Note',
+      body: 'Full Note Body',
+      createdAt: DateTime.now().toUtc(),
+      updatedAt: DateTime.now().toUtc(),
+    );
+    when(() => mockRepository.getNote('repo-note-1')).thenAnswer((_) async => expectedNote);
+
+    final result = await container.read(noteNotifierProvider.notifier).getNote('repo-note-1');
+    expect(result, equals(expectedNote));
+    verify(() => mockRepository.getNote('repo-note-1')).called(1);
   });
 
   test('addNote calls saveNote on repository', () {
@@ -122,7 +208,7 @@ void main() {
     when(() => mockRepository.deleteNote(any())).thenAnswer((_) async {});
 
     final controller = StreamController<List<NoteListItem>>();
-    when(() => mockRepository.watchAllNotes()).thenAnswer((_) => controller.stream);
+    when(() => mockRepository.watchAllNotes(limit: any(named: 'limit'))).thenAnswer((_) => controller.stream);
 
     container.listen(noteNotifierProvider, (_, __) {});
 
@@ -146,7 +232,7 @@ void main() {
 
   test('getNoteById returns matching note from state', () async {
     final controller = StreamController<List<NoteListItem>>();
-    when(() => mockRepository.watchAllNotes()).thenAnswer((_) => controller.stream);
+    when(() => mockRepository.watchAllNotes(limit: any(named: 'limit'))).thenAnswer((_) => controller.stream);
 
     final item = _testItem('target-id', title: 'Target Title');
     container.listen(noteNotifierProvider, (_, __) {});
@@ -168,7 +254,7 @@ void main() {
     when(() => mockRepository.saveNote(any())).thenAnswer((_) async {});
 
     final controller = StreamController<List<NoteListItem>>();
-    when(() => mockRepository.watchAllNotes()).thenAnswer((_) => controller.stream);
+    when(() => mockRepository.watchAllNotes(limit: any(named: 'limit'))).thenAnswer((_) => controller.stream);
 
     container.listen(noteNotifierProvider, (_, __) {});
 
@@ -197,7 +283,7 @@ void main() {
     Perf.startStartupWatch();
 
     final controller = StreamController<List<NoteListItem>>();
-    when(() => mockRepository.watchAllNotes()).thenAnswer((_) => controller.stream);
+    when(() => mockRepository.watchAllNotes(limit: any(named: 'limit'))).thenAnswer((_) => controller.stream);
 
     container.listen(noteNotifierProvider, (_, __) {});
     controller.add([_testItem('startup-note')]);

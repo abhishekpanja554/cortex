@@ -1,3 +1,4 @@
+import 'package:cortex/features/notes/domain/entities/note_entity.dart';
 import 'package:cortex/features/notes/domain/note_template.dart';
 import 'package:cortex/features/notes/presentation/providers/providers.dart';
 import 'package:cortex/features/sync/presentation/sync_providers.dart';
@@ -18,8 +19,14 @@ class NoteRoutes {
   /// If the note is not found on this device (e.g. created on another device or deleted),
   /// triggers a sync and alerts the user rather than opening an empty editor that
   /// causes duplicate conflicts.
-  static void openOrSync(BuildContext context, WidgetRef ref, String noteId) {
-    final note = ref.read(noteNotifierProvider.notifier).getNoteById(noteId);
+  static Future<void> openOrSync(BuildContext context, WidgetRef ref, String noteId) async {
+    NoteEntity? note;
+    try {
+      note = await ref.read(noteRepositoryProvider).getNote(noteId);
+    } catch (_) {
+      note = null;
+    }
+    if (!context.mounted) return;
     if (note == null) {
       ref.read(syncSchedulerProvider).requestSync();
       ScaffoldMessenger.of(context).showSnackBar(

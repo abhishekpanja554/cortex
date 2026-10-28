@@ -13,14 +13,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class NoteSliverList extends StatelessWidget {
   final List<NoteListItem> notes;
   final String searchQuery;
+  final VoidCallback? onLoadMore;
 
-  const NoteSliverList({super.key, required this.notes, this.searchQuery = ''});
+  const NoteSliverList({
+    super.key,
+    required this.notes,
+    this.searchQuery = '',
+    this.onLoadMore,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SliverList.builder(
       itemCount: notes.length,
       itemBuilder: (context, index) {
+        if (onLoadMore != null && index >= notes.length - 20) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            onLoadMore!();
+          });
+        }
         final note = notes[index];
         void delete() => NoteActions.deleteWithUndo(
               container: ProviderScope.containerOf(context, listen: false),

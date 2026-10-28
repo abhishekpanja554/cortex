@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:clock/clock.dart';
 import 'package:cortex/core/database/app_database.dart';
@@ -76,7 +77,7 @@ class DriftNoteRepository implements NoteRepository {
   }
 
   @override
-  Stream<List<NoteListItem>> watchAllNotes() {
+  Stream<List<NoteListItem>> watchAllNotes({required int limit}) {
     final query = _db.selectOnly(_db.notes)
       ..addColumns([
         _db.notes.id,
@@ -92,7 +93,8 @@ class DriftNoteRepository implements NoteRepository {
       ..where(_db.notes.deletedAt.isNull())
       ..orderBy([
         OrderingTerm(expression: _db.notes.updatedAt, mode: OrderingMode.desc),
-      ]);
+      ])
+      ..limit(limit);
 
     return query.watch().map((rows) {
       return Perf.measure(
@@ -114,6 +116,54 @@ class DriftNoteRepository implements NoteRepository {
         count: rows.length,
       );
     });
+  }
+
+  @override
+  Stream<int> watchNoteCount() {
+    final countExp = _db.notes.id.count();
+    final query = _db.selectOnly(_db.notes)
+      ..addColumns([countExp])
+      ..where(_db.notes.deletedAt.isNull());
+
+    late final StreamController<int> controller;
+    StreamSubscription? sub;
+    Future<void> updateChain = Future.value();
+
+    Future<void> fetchAndEmit() async {
+      if (controller.isClosed) return;
+      try {
+        final count = await Perf.measureAsync('notes.count', () async {
+          final row = await query.getSingleOrNull();
+          return row?.read(countExp) ?? 0;
+        });
+        if (!controller.isClosed) {
+          controller.add(count);
+        }
+      } catch (e, s) {
+        if (!controller.isClosed) {
+          controller.addError(e, s);
+        }
+      }
+    }
+
+    void schedule() {
+      updateChain = updateChain.catchError((_) {}).then((_) => fetchAndEmit());
+    }
+
+    controller = StreamController<int>(
+      onListen: () {
+        schedule();
+        sub = _db.tableUpdates(TableUpdateQuery.onAllTables([_db.notes])).listen((_) {
+          schedule();
+        });
+      },
+      onCancel: () {
+        sub?.cancel();
+        sub = null;
+      },
+    );
+
+    return controller.stream;
   }
 
   @override
@@ -149,6 +199,23 @@ class DriftNoteRepository implements NoteRepository {
         conflictField: row.conflictField,
       );
     });
+  }
+
+  @override
+  Stream<List<NoteEntity>> watchConflictCopies(String noteId) {
+    final query = _db.select(_db.notes)
+      ..where((t) => t.conflictOf.equals(noteId) & t.deletedAt.isNull());
+    return query.watch().map((rows) => rows
+        .map((row) => NoteEntity(
+              id: row.id,
+              title: row.title,
+              body: row.body,
+              createdAt: row.createdAt,
+              updatedAt: row.updatedAt,
+              conflictOf: row.conflictOf,
+              conflictField: row.conflictField,
+            ))
+        .toList());
   }
 
   @override

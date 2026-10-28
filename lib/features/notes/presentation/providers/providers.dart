@@ -5,6 +5,7 @@ import 'package:cortex/features/notes/domain/entities/note_entity.dart';
 import 'package:cortex/features/notes/domain/entities/note_list_item.dart';
 import 'package:cortex/features/notes/domain/repositories/note_repository.dart';
 import 'package:cortex/features/notes/presentation/notifiers/note_notifier.dart';
+import 'package:cortex/features/notes/presentation/notifiers/search_notifier.dart';
 import 'package:cortex/features/notes/presentation/state/notes_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,6 +20,18 @@ final noteNotifierProvider = NotifierProvider<NoteNotifier, NotesState>(
 final noteStreamProvider = StreamProvider.family<NoteEntity?, String>((ref, id) {
   return ref.watch(noteRepositoryProvider).watchNote(id);
 });
+
+final conflictCopiesProvider = StreamProvider.family<List<NoteEntity>, String>((ref, noteId) {
+  return ref.watch(noteRepositoryProvider).watchConflictCopies(noteId);
+});
+
+final noteByIdProvider = FutureProvider.family<NoteEntity?, String>((ref, id) {
+  return ref.watch(noteNotifierProvider.notifier).getNote(id);
+});
+
+final searchNotifierProvider = NotifierProvider<SearchNotifier, SearchState>(
+  SearchNotifier.new,
+);
 
 final searchResultsProvider = FutureProvider.family<List<NoteListItem>, String>((ref, query) {
   final q = query.trim();

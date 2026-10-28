@@ -594,19 +594,10 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
         ? ref.watch(noteStreamProvider(currentNote!.conflictOf!)).asData?.value
         : null;
 
-    final conflictCopyId = _noteId != null && !isConflictCopy
-        ? ref
-            .watch(noteNotifierProvider)
-            .notes
-            .where((n) => n.conflictOf == _noteId)
-            .map((n) => n.id)
-            .firstOrNull
-        : null;
-    final conflictCopy = conflictCopyId != null
-        ? ref.watch(noteStreamProvider(conflictCopyId)).asData?.value
-        : null;
-    final conflictCopies =
-        conflictCopy != null ? [conflictCopy] : <NoteEntity>[];
+    final conflictCopies = _noteId != null && !isConflictCopy
+        ? ref.watch(conflictCopiesProvider(_noteId!)).asData?.value ??
+            const <NoteEntity>[]
+        : const <NoteEntity>[];
 
     if (_isEditing && !_hasInitializedFromNote && currentNote != null) {
       _initFromNote(currentNote);

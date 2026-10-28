@@ -270,7 +270,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final email = ref.watch(currentUserEmailProvider).value;
-    final noteCount = ref.watch(noteNotifierProvider).notes.length;
+    final noteCount = ref.watch(noteNotifierProvider).totalCount;
     final devState = ref.watch(developerStateProvider);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
