@@ -4,6 +4,7 @@ import 'package:cortex/core/constants/colors.dart';
 import 'package:cortex/core/constants/dimens.dart';
 import 'package:cortex/core/providers/core_providers.dart';
 import 'package:cortex/core/theme/app_shapes.dart';
+import 'package:cortex/features/attachments/presentation/attachment_providers.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,10 +32,11 @@ File resolveAttachmentFile(String path, Directory documentsDir) {
 
 /// Shows a note's image attachment.
 ///
-/// When the file isn't on this device (e.g. after logging out and back in,
-/// since attachments aren't synced to the server yet) it shows a clear
-/// placeholder instead of an invisible gap — or nothing at all when
-/// [hideWhenMissing] is set (used for list-card covers).
+/// When the file isn't on this device (fresh install, picked on another
+/// device, after logging out and back in) it's downloaded from the server.
+/// Until then — or if that fails, e.g. offline — it shows a clear placeholder
+/// instead of an invisible gap, or nothing at all when [hideWhenMissing] is
+/// set (used for list-card covers).
 class AttachmentImage extends ConsumerWidget {
   final String path;
   final BoxFit fit;
@@ -54,11 +56,19 @@ class AttachmentImage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final file = resolveAttachmentFile(path, ref.watch(documentsDirectoryProvider));
+    if (file.existsSync()) return _buildImage(context, file);
 
-    if (!file.existsSync()) {
-      return hideWhenMissing ? const SizedBox.shrink() : const _MissingImage();
-    }
+    // Not on this device: fetch it from the server.
+    final download = ref.watch(attachmentFileProvider(path));
+    return switch (download) {
+      AsyncData(value: final File downloaded) => _buildImage(context, downloaded),
+      _ when hideWhenMissing => const SizedBox.shrink(),
+      AsyncLoading() => const _MissingImage(loading: true),
+      _ => const _MissingImage(),
+    };
+  }
 
+  Widget _buildImage(BuildContext context, File file) {
     final dpr = MediaQuery.devicePixelRatioOf(context);
     return ClipPath(
       clipper: ShapeBorderClipper(shape: AppShapes.continuous(borderRadius)),
@@ -80,7 +90,9 @@ class AttachmentImage extends ConsumerWidget {
 }
 
 class _MissingImage extends StatelessWidget {
-  const _MissingImage();
+  final bool loading;
+
+  const _MissingImage({this.loading = false});
 
   @override
   Widget build(BuildContext context) {
@@ -97,14 +109,18 @@ class _MissingImage extends StatelessWidget {
         color: AppColors.surfaceMuted,
         shape: AppShapes.continuous(AppRadius.lg),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(CupertinoIcons.photo, color: AppColors.textSecondary),
-          SizedBox(width: AppSpacing.md),
+          loading
+              ? const CupertinoActivityIndicator()
+              : const Icon(CupertinoIcons.photo, color: AppColors.textSecondary),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
-              'This image isn’t available on this device.',
-              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              loading
+                  ? 'Downloading image…'
+                  : 'This image isn’t available right now.',
+              style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
             ),
           ),
         ],

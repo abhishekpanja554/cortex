@@ -359,6 +359,7 @@ class DriftNoteRepository implements NoteRepository {
     return Perf.measureAsync('notes.wipeAll', () async {
       await _db.delete(_db.notes).go();
       await _db.delete(_db.syncState).go();
+      await _db.delete(_db.pendingUploads).go();
       final attachmentsDir = Directory('${_docsDir.path}/attachments');
       if (await attachmentsDir.exists()) {
         await attachmentsDir.delete(recursive: true);

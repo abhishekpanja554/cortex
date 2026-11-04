@@ -38,3 +38,12 @@ class SyncState extends Table {
   @override
   Set<Column> get primaryKey => {key};
 }
+
+class PendingUploads extends Table {
+  TextColumn get path => text()();
+  DateTimeColumn get createdAt =>
+      dateTime().clientDefault(() => DateTime.now().toUtc())();
+
+  @override
+  Set<Column> get primaryKey => {path};
+}

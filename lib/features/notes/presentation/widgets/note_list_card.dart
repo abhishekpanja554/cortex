@@ -40,7 +40,6 @@ class NoteListCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.page,
         vertical: AppSpacing.xs + 1,
       ),
       // No backdrop blur per card: long lists stay smooth, and the rim and

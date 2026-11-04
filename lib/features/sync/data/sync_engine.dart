@@ -1,5 +1,6 @@
 import 'package:clock/clock.dart';
 import 'package:cortex/core/perf/perf.dart';
+import 'package:cortex/features/attachments/data/attachment_uploader.dart';
 import 'package:cortex/features/sync/data/sync_api.dart';
 import 'package:cortex/features/sync/data/sync_local_store.dart';
 import 'package:cortex/features/sync/domain/sync_failure.dart';
@@ -26,16 +27,19 @@ class SyncEngine {
   final SyncApi _api;
   final SyncLocalStore _store;
   final int Function() _getSession;
+  final AttachmentUploader? _attachmentUploader;
   final Duration undoGracePeriod;
 
   SyncEngine({
     required SyncApi api,
     required SyncLocalStore store,
     required int Function() getSession,
+    AttachmentUploader? attachmentUploader,
     this.undoGracePeriod = const Duration(seconds: 6),
   }) : _api = api,
        _store = store,
-       _getSession = getSession;
+       _getSession = getSession,
+       _attachmentUploader = attachmentUploader;
 
 Future<SyncResult> syncOnce() async {
     // Snapshot current session so we can bail out if the user logs out mid-sync
@@ -45,6 +49,16 @@ Future<SyncResult> syncOnce() async {
       if (_getSession() != session) {
         throw const SessionExpiredSyncFailure();
       }
+    }
+
+    // 0. Upload images picked on this device first, so a device that pulls
+    // the note referencing one can already download it.
+    final uploader = _attachmentUploader;
+    if (uploader != null) {
+      await Perf.measureAsync('sync.uploadAttachments', () {
+        return uploader.uploadPending(checkSession: checkSession);
+      });
+      checkSession();
     }
 
     // 1. Gather dirty notes and push changed fields

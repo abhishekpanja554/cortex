@@ -39,42 +39,46 @@ class NoteSliverList extends StatelessWidget {
               note: note,
             );
 
-        return Dismissible(
-          key: ValueKey('note-${note.id}'),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            margin: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.page,
-              vertical: AppSpacing.xs + 1,
-            ),
-            decoration: ShapeDecoration(
-              color: AppColors.red,
-              shape: AppShapes.continuous(AppRadius.xl),
-            ),
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: AppSpacing.xxl),
-            child: const Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(CupertinoIcons.trash_fill, color: Colors.white, size: 22),
-                SizedBox(height: 4),
-                Text(
-                  'Delete',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
+        return Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.page,
           ),
-          onDismissed: (_) => delete(),
-          child: NoteListCard(
-            preview: note,
-            searchQuery: searchQuery,
-            onTap: () => NoteRoutes.open(context, note.id),
-            onDelete: delete,
+          child: Dismissible(
+            key: ValueKey('note-${note.id}'),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              margin: const EdgeInsets.symmetric(
+                vertical: AppSpacing.xs + 1,
+              ),
+              decoration: ShapeDecoration(
+                color: AppColors.red,
+                shape: AppShapes.continuous(AppRadius.xl),
+              ),
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: AppSpacing.xxl),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(CupertinoIcons.trash_fill, color: Colors.white, size: 22),
+                  SizedBox(height: 4),
+                  Text(
+                    'Delete',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            onDismissed: (_) => delete(),
+            child: NoteListCard(
+              preview: note,
+              searchQuery: searchQuery,
+              onTap: () => NoteRoutes.open(context, note.id),
+              onDelete: delete,
+            ),
           ),
         );
       },

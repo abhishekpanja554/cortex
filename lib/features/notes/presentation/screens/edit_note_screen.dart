@@ -7,6 +7,7 @@ import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/core/constants/text_styles.dart';
 import 'package:cortex/core/theme/liquid_glass.dart';
 import 'package:cortex/core/utils/date_format.dart';
+import 'package:cortex/features/attachments/presentation/attachment_providers.dart';
 import 'package:cortex/features/notes/domain/entities/note_entity.dart';
 import 'package:cortex/features/notes/domain/note_body_codec.dart';
 import 'package:cortex/features/notes/domain/note_template.dart';
@@ -402,6 +403,9 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
     final newImage = File('${attachDir.path}/$uuid.jpg');
     await File(xfile.path).copy(newImage.path);
     final relativePath = 'attachments/$uuid.jpg';
+    // Uploaded on the next sync, so the image survives a reinstall and
+    // reaches the user's other devices.
+    await ref.read(attachmentStoreProvider).queueUpload(relativePath);
     if (!mounted) return;
 
     String? focusAfter;
@@ -1481,6 +1485,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
         focusNode: _titleFocus,
         style: TextStyles.headline,
         maxLines: null,
+        scrollPhysics: const NeverScrollableScrollPhysics(),
         keyboardType: TextInputType.text,
         textInputAction: TextInputAction.next,
         textCapitalization: TextCapitalization.sentences,
@@ -1581,6 +1586,10 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
             focusNode: _focusNodes[block.id],
             style: TextStyles.body,
             maxLines: null,
+            // The field grows to fit its text, so its own scroll view never
+            // needs to move — but with a fractional line height it can end
+            // up a hair taller than the field and steal the page's drag.
+            scrollPhysics: const NeverScrollableScrollPhysics(),
             keyboardType: TextInputType.multiline,
             textCapitalization: TextCapitalization.sentences,
             decoration: InputDecoration(
@@ -1635,6 +1644,7 @@ class _EditNoteScreenState extends ConsumerState<EditNoteScreen> {
             // Wraps visually, but Return creates the next item instead of a
             // newline (newlines can't be stored inside a checklist item).
             maxLines: null,
+            scrollPhysics: const NeverScrollableScrollPhysics(),
             keyboardType: TextInputType.text,
             textInputAction: TextInputAction.next,
             textCapitalization: TextCapitalization.sentences,

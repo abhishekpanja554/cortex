@@ -163,8 +163,8 @@ void main() {
         ),
       );
 
-      // Verify schema version is now 5
-      expect(db.schemaVersion, 5);
+      // Verify the database ends at the current schema version
+      expect(db.schemaVersion, 6);
 
       // Verify old index notes_updated_at is dropped and notes_list_cover and notes_conflict_of exist
       final indexRows = await db
@@ -264,8 +264,8 @@ void main() {
         ),
       );
 
-      // Verify schema version is now 5
-      expect(db.schemaVersion, 5);
+      // Verify the database ends at the current schema version
+      expect(db.schemaVersion, 6);
 
       // Verify notes_conflict_of index exists
       final indexRows = await db

@@ -1,5 +1,6 @@
 import 'package:cortex/core/database/tables.dart';
 import 'package:cortex/core/perf/perf.dart';
+import 'package:cortex/features/attachments/domain/attachment_ref.dart';
 import 'package:cortex/features/notes/domain/entities/note_preview_data.dart';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
@@ -7,13 +8,13 @@ import 'package:uuid/uuid.dart';
 
 part 'app_database.g.dart';
 
-@DriftDatabase(tables: [Notes, SyncState])
+@DriftDatabase(tables: [Notes, SyncState, PendingUploads])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -42,6 +43,10 @@ class AppDatabase extends _$AppDatabase {
         await customStatement(
           'CREATE INDEX IF NOT EXISTS notes_conflict_of ON notes(conflict_of) WHERE conflict_of IS NOT NULL;',
         );
+      }
+      if (from < 6) {
+        await m.createTable(pendingUploads);
+        await _queueExistingAttachmentsV6();
       }
     },
     onCreate: (m) async {
@@ -78,6 +83,25 @@ class AppDatabase extends _$AppDatabase {
         if (rows.length < batchSize) break;
         offset += batchSize;
       }
+    });
+  }
+
+  // Images added before attachments synced exist only on this device; queue
+  // them so the next sync uploads them. Paths whose file is gone are dropped
+  // by the uploader.
+  Future<void> _queueExistingAttachmentsV6() async {
+    final rows = await customSelect(
+      "SELECT body FROM notes WHERE deleted_at IS NULL AND body LIKE '%attachments/%'",
+    ).get();
+    final paths = {
+      for (final row in rows) ...AttachmentRef.pathsIn(row.read<String>('body')),
+    };
+    await batch((b) {
+      b.insertAll(
+        pendingUploads,
+        [for (final path in paths) PendingUploadsCompanion.insert(path: path)],
+        mode: InsertMode.insertOrIgnore,
+      );
     });
   }
 }
