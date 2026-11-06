@@ -1,82 +1,143 @@
-# Cortex 🧠 (WIP)
+# Cortex
 
-**Cortex** is a modern, dynamic, and highly secure block-based note-taking application built with Flutter. It completely reimagines how you write, organize, and protect your thoughts locally on your device.
+Cortex is an offline-first notes app: notes live in an encrypted database on your phone and sync across devices, with field-level conflict handling.
+You can ask questions about your notes in plain language and get answers that cite the notes they came from, using hybrid keyword and semantic search with reranking.
+A built-in agent can also search, create, update and delete notes for you, and any destructive action waits for your approval.
 
-## 🚀 Key Features
+<p align="center">
+  <img src="docs/demo.gif" alt="Cortex demo" width="800">
+</p>
 
-* **Modular Block Editor**: Ditch standard text fields. Write notes utilizing dynamic blocks (Text, Checklists, Images).
-* **Drag & Drop**: Effortlessly reorder your blocks via a smooth drag-and-drop interface (`ReorderableListView`).
-* **Military-Grade Encryption**: Your privacy is paramount. All notes are encrypted using **AES-GCM** encryption before being saved locally to the database.
-* **Biometric Security**: Lock your notes behind a secure Lock Screen powered by native device biometrics (FaceID/Fingerprint) utilizing `local_auth`.
-* **Offline-First & Blazing Fast**: Powered by **Isar Database**, meaning your data is stored fully locally and queries happen in milliseconds.
-* **Fluid UI & Polish**: Enjoy a premium user experience featuring Glassmorphism design aesthetics, fluid Hero animations, and fully responsive layouts.
-* **Native Battery Safeguards**: Custom Kotlin MethodChannels natively ping your Android device's battery level and warn you to save your data if the battery drops below 10%.
-* **Full Data Ownership**: Export all your notes directly to JSON for full portability.
+## Architecture
 
-## 🛠️ Tech Stack
+![Cortex architecture: the Flutter app talks to a Spring Boot API and a Python AI service, connected by a Redis job queue, with Postgres and pgvector for storage and Gemini for embeddings and chat](docs/architecture.png)
 
-* **Framework**: [Flutter](https://flutter.dev/) (Dart)
-* **State Management**: [Riverpod](https://riverpod.dev/)
-* **Local Database**: [Isar Community](https://isar.dev/)
-* **Security & Crypto**: `encrypt`, `flutter_secure_storage`, `local_auth`
-* **Architecture**: Clean Architecture (Presentation, Domain, Data layers)
+Cortex is three repositories:
 
-## 📁 Project Structure
+| Repository | What it does | Stack |
+|---|---|---|
+| **cortex** (this repo) | Mobile app: block editor, encrypted local database, sync engine, chat and agent UI | Flutter, Riverpod, Drift + SQLCipher |
+| [**cortex_app_be**](https://github.com/abhishekpanja554/cortex_app_be) | Auth (JWT), notes, sync, attachments, keyword search; publishes embedding jobs | Spring Boot 4, Java 26, Postgres, Redis |
+| [**cortex-ai**](https://github.com/abhishekpanja554/cortex-ai) | Embedding worker, hybrid search, reranking, RAG chat and agent, streamed over SSE | FastAPI, Python 3.14, pgvector, Gemini |
 
-```
-lib/
-├── core/
-│   ├── constants/       # App colors, strings, text styles
-│   └── native/          # Custom MethodChannels (e.g., BatteryService)
-├── features/
-│   ├── app_core/        # Base navigation and common UI (GlassBottomNav)
-│   ├── notes/           # The core note-taking and block-editor logic
-│   │   ├── data/        # Isar repositories and models
-│   │   ├── domain/      # Sealed classes for Blocks and Notes
-│   │   └── presentation/# Note lists, Notifiers, and Edit Screens
-│   ├── security/        # Encryption services and Biometric Lock Screen
-│   └── settings/        # App preferences and JSON export logic
-└── main.dart            # App entry point
-```
+## Running it locally
 
-## 🏗️ Getting Started
+Start the services in this order: cortex_app_be, then cortex-ai, then the app.
 
 ### Prerequisites
-* Flutter SDK (`>=3.0.0`)
-* Android Studio / Xcode for emulators and compilation.
 
-### Installation
+- PostgreSQL with the [pgvector](https://github.com/pgvector/pgvector) extension, version 0.7 or later (the vector index uses `halfvec`)
+- Docker (for Redis)
+- JDK 26
+- Python 3.14 and [uv](https://docs.astral.sh/uv/)
+- Flutter (stable channel, Dart 3.9+) with Xcode or Android Studio
+- A [Gemini API key](https://aistudio.google.com/apikey)
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/cortex.git
-   cd cortex
-   ```
+Create the two databases:
 
-2. **Install Dependencies**
-   ```bash
-   flutter pub get
-   ```
+```bash
+createdb cortex_app
+createdb cortex-ai
+```
 
-3. **Generate Code** (If you make changes to Isar models or Freezed classes)
-   ```bash
-   dart run build_runner build --delete-conflicting-outputs
-   ```
+Generate two secrets. Both services need the same values.
 
-4. **Run the App**
-   ```bash
-   flutter run
-   ```
+```bash
+export JWT_SECRET=$(openssl rand -base64 48)        # must be at least 256 bits
+export CORTEX_AI_API_KEY=$(openssl rand -hex 32)    # service-to-service key for /internal/*
+```
 
-## 🧪 Testing
+### 1. cortex_app_be (Spring Boot API, port 8080)
 
-The project includes Unit and Widget tests. To run the test suite:
+```bash
+git clone https://github.com/abhishekpanja554/cortex_app_be.git
+cd cortex_app_be
+
+export DB_PASSWORD=<your postgres password>
+# The datasource defaults to localhost:5432/cortex_app as user "abhis"; override it if yours differs:
+export SPRING_DATASOURCE_USERNAME=<your postgres user>
+
+./mvnw spring-boot:run
+```
+
+- Flyway creates the schema on first start.
+- With Docker running, Spring Boot starts Redis from `compose.yaml` for you. Otherwise run `docker compose up -d` first.
+- The app refuses to start if `JWT_SECRET` is missing or shorter than 256 bits.
+- Uploaded images are stored in `./data/attachments`. Set `ATTACHMENTS_DIR` to change that.
+
+### 2. cortex-ai (FastAPI service, port 8000, plus a worker)
+
+```bash
+git clone https://github.com/abhishekpanja554/cortex-ai.git
+cd cortex-ai
+uv sync
+cp .env.example .env
+```
+
+Fill in `.env`:
+
+| Variable | Value |
+|---|---|
+| `DB_USER`, `DB_PASSWORD` | Your Postgres login |
+| `GEMINI_API_KEY` | Your Gemini key |
+| `CORTEX_AI_API_KEY` | Same value as cortex_app_be |
+| `JWT_SECRET` | Same value as cortex_app_be |
+| `GEMINI_COMPLEX_MODEL` | Model for questions with 3+ sources, e.g. `gemini-3.5-flash-lite` |
+
+Then run the migrations and start both processes, each in its own terminal:
+
+```bash
+uv run alembic upgrade head                                  # also enables the vector extension
+uv run uvicorn app.api.main:app --reload --host 0.0.0.0      # HTTP API
+uv run python -m app.worker.main                             # embedding worker
+```
+
+The first chat request downloads the reranker model (`cross-encoder/ms-marco-MiniLM-L-6-v2`, about 90 MB).
+
+### 3. cortex (Flutter app)
+
+```bash
+git clone https://github.com/abhishekpanja554/cortex.git
+cd cortex
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+```
+
+**On a simulator or emulator** the defaults point at `localhost`:
+
+```bash
+flutter run
+```
+
+**On a physical phone over Wi-Fi**, point it at your computer's LAN address:
+
+```bash
+flutter run \
+  --dart-define=API_BASE_URL=http://<your-lan-ip>:8080 \
+  --dart-define=AI_BASE_URL=http://<your-lan-ip>:8000
+```
+
+**On an Android phone over USB**, you can skip the IP instead:
+
+```bash
+adb reverse tcp:8080 tcp:8080
+adb reverse tcp:8000 tcp:8000
+flutter run
+```
+
+Register an account in the app. Notes you write are embedded in the background within a few seconds, and then you can ask about them in **Ask Cortex**.
+
+### Tests
+
 ```bash
 flutter test
 ```
 
-## 🤝 Contributing
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/yourusername/cortex/issues).
+<!--
+## Evaluation
 
-## 📝 License
-This project is licensed under the MIT License.
+TODO: add once the golden-question set exists.
+- Number of questions and how they were written
+- Hit rate / MRR before and after the reranker
+- Whether it runs in CI
+-->

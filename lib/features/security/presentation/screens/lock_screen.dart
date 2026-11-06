@@ -1,8 +1,9 @@
-import 'dart:ui';
-import 'package:cortex/core/constants/colors.dart';
+import 'package:cortex/features/security/presentation/widgets/pin_pad.dart';
 import 'package:cortex/features/security/services/security_service.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cortex/core/providers/core_providers.dart';
 
 class LockScreen extends ConsumerStatefulWidget {
   final Widget child;
@@ -17,8 +18,11 @@ class _LockScreenState extends ConsumerState<LockScreen>
     with WidgetsBindingObserver {
   bool _isAuthenticated = false;
   bool _isAuthenticating = false;
-  final SecurityService _securityService = SecurityService();
+  SecurityService get _securityService => ref.read(securityServiceProvider);
   bool _isPrivateModeEnabled = false;
+  bool _isDeviceSecurityAvailable = false;
+  bool _showPinPad = false;
+  String? _pinError;
 
   @override
   void initState() {
@@ -34,15 +38,26 @@ class _LockScreenState extends ConsumerState<LockScreen>
   }
 
   Future<void> _checkPrivateMode() async {
+    await _securityService.syncPrivacyState();
     final isEnabled = await _securityService.isPrivateModeEnabled;
+    final isDeviceSecurityAvailable =
+        await _securityService.isDeviceSecurityAvailable;
+
     if (mounted) {
       setState(() {
         _isPrivateModeEnabled = isEnabled;
+        _isDeviceSecurityAvailable = isDeviceSecurityAvailable;
         if (!isEnabled) {
-          _isAuthenticated = true; // No auth needed
+          _isAuthenticated = true;
+        } else if (!isDeviceSecurityAvailable) {
+          _showPinPad = true;
         }
       });
-      if (isEnabled && !_isAuthenticated && !_isAuthenticating) {
+
+      if (isEnabled &&
+          !_isAuthenticated &&
+          !_isAuthenticating &&
+          isDeviceSecurityAvailable) {
         _authenticate();
       }
     }
@@ -52,12 +67,19 @@ class _LockScreenState extends ConsumerState<LockScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (_isPrivateModeEnabled && !_isAuthenticated && !_isAuthenticating) {
-        _authenticate();
+        if (_isDeviceSecurityAvailable) {
+          _authenticate();
+        } else {
+          setState(() {
+            _showPinPad = true;
+          });
+        }
       }
     } else if (state == AppLifecycleState.paused) {
       if (_isPrivateModeEnabled) {
         setState(() {
           _isAuthenticated = false;
+          _showPinPad = !_isDeviceSecurityAvailable;
         });
       }
     }
@@ -76,6 +98,22 @@ class _LockScreenState extends ConsumerState<LockScreen>
       setState(() {
         _isAuthenticated = success;
         _isAuthenticating = false;
+        if (!success && _isDeviceSecurityAvailable) {}
+      });
+    }
+  }
+
+  Future<void> _onPinEntered(String pin) async {
+    final isValid = await _securityService.verifyAppPin(pin);
+    if (mounted) {
+      setState(() {
+        if (isValid) {
+          _isAuthenticated = true;
+          _showPinPad = false;
+          _pinError = null;
+        } else {
+          _pinError = 'Incorrect PIN. Try again.';
+        }
       });
     }
   }
@@ -91,61 +129,82 @@ class _LockScreenState extends ConsumerState<LockScreen>
         children: [
           widget.child,
 
+          // Fully opaque: locked notes must not be readable behind the lock.
           Positioned.fill(
-            child: ClipRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                child: Container(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.lock_outline_rounded,
-                          size: 64,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(height: 20),
-                        const Text(
-                          "Cortex is Locked",
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 40),
-                        if (_isAuthenticating)
-                          const CircularProgressIndicator(
-                            color: AppColors.primary,
-                          )
-                        else
-                          ElevatedButton.icon(
-                            onPressed: _authenticate,
-                            icon: const Icon(Icons.fingerprint),
-                            label: const Text("Unlock"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
+            child: LockBackdrop(
+              child: SafeArea(
+                child: Center(
+                  child: _showPinPad ? _buildPinEntry() : _buildDeviceAuth(),
                 ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPinEntry() {
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PinPad(
+            onCompleted: _onPinEntered,
+            title: 'Cortex is locked',
+            subtitle: 'Enter your app PIN to unlock',
+            errorText: _pinError,
+          ),
+          if (_isDeviceSecurityAvailable) ...[
+            const SizedBox(height: 20),
+            TextButton(
+              onPressed: () => setState(() => _showPinPad = false),
+              child: const Text(
+                'Use Face ID / fingerprint',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeviceAuth() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(CupertinoIcons.lock_fill, size: 56, color: Colors.white),
+        const SizedBox(height: 20),
+        const Text(
+          'Cortex is locked',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 40),
+        if (_isAuthenticating)
+          const CupertinoActivityIndicator(color: Colors.white, radius: 14)
+        else
+          SizedBox(
+            width: 200,
+            child: FilledButton.icon(
+              onPressed: _authenticate,
+              icon: const Icon(CupertinoIcons.lock_open_fill),
+              label: const Text('Unlock'),
+            ),
+          ),
+        const SizedBox(height: 20),
+        TextButton(
+          onPressed: () => setState(() => _showPinPad = true),
+          child: const Text(
+            'Use app PIN',
+            style: TextStyle(color: Colors.white70),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,0 +1,4 @@
+data: {"type": "error", "message": "Conversation not found or not yours."}
+
+data: {"type": "done"}
+

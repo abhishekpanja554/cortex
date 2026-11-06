@@ -1,149 +1,142 @@
-import 'dart:io';
-import 'dart:ui';
-
 import 'package:cortex/core/constants/colors.dart';
+import 'package:cortex/core/constants/dimens.dart';
+import 'package:cortex/core/constants/string_constants.dart';
 import 'package:cortex/core/constants/text_styles.dart';
-import 'package:cortex/features/notes/domain/entities/note.dart';
+import 'package:cortex/core/theme/liquid_glass.dart';
+import 'package:cortex/core/utils/date_format.dart';
+import 'package:cortex/features/notes/domain/entities/note_list_item.dart';
+import 'package:cortex/features/notes/domain/entities/note_preview_data.dart';
+import 'package:cortex/features/notes/presentation/widgets/attachment_image.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+/// Preview card shown on the Notes and Search tabs.
+///
+/// Pure presentation: navigation and deletion are passed in as callbacks so
+/// the same card works everywhere (and in widget tests without a router).
 class NoteListCard extends StatelessWidget {
-  final Note note;
-  final VoidCallback? onTap;
+  final NoteListItem preview;
   final String searchQuery;
+  final VoidCallback? onTap;
+  final VoidCallback? onDelete;
 
   const NoteListCard({
     super.key,
-    required this.note,
-    this.onTap,
+    required this.preview,
     this.searchQuery = '',
+    this.onTap,
+    this.onDelete,
   });
+
+  NoteListItem get note => preview;
 
   @override
   Widget build(BuildContext context) {
-    final todoBlocks = note.blocks.whereType<CheckboxBlock>().take(3).toList();
+    final note = preview;
+    final todos = preview.topTodos;
+    final doneCount = todos.where((t) => t.isChecked).length;
+    final coverImage = preview.firstImagePath;
+    final hasTitle = note.title.trim().isNotEmpty;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Hero(
-        tag: 'note_${note.id}',
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.45),
-                      Colors.white.withValues(alpha: 0.25),
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        vertical: AppSpacing.xs + 1,
+      ),
+      // No backdrop blur per card: long lists stay smooth, and the rim and
+      // sheen still read as glass over the ambient background.
+      child: LiquidGlass.rounded(
+        radius: AppRadius.xl,
+        tint: AppColors.glassFillStrong,
+        blur: 0,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg + 2,
+                AppSpacing.md + 2,
+                AppSpacing.xs,
+                AppSpacing.md + 2,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (note.conflictOf != null) _ConflictBadge(field: note.conflictField),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: hasTitle
+                            ? _highlight(note.title, TextStyles.cardTitle, maxLines: 1)
+                            : Text(
+                                AppStrings.untitled,
+                                style: TextStyles.cardTitle.copyWith(
+                                  color: AppColors.textTertiary,
+                                ),
+                              ),
+                      ),
+                      if (onDelete != null)
+                        CupertinoButton(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                          minimumSize: const Size(40, 32),
+                          onPressed: () => _showActions(context),
+                          child: const Icon(
+                            CupertinoIcons.ellipsis,
+                            size: 20,
+                            color: AppColors.textSecondary,
+                          ),
+                        )
+                      else
+                        const SizedBox(height: 32, width: AppSpacing.md),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.60),
-                    width: 1.2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 20,
-                      spreadRadius: 1,
-                      offset: const Offset(0, 6),
-                    ),
-                    BoxShadow(
-                      color: Colors.white.withValues(alpha: 0.50),
-                      blurRadius: 1,
-                      spreadRadius: 0,
-                      offset: const Offset(-1, -1),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.md + 2),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: _highlightSearchTerm(
-                            note.title,
-                            TextStyles.noteTitleStyle,
-                            maxLines: 1,
+                        if (coverImage != null && coverImage.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              top: AppSpacing.sm,
+                              bottom: AppSpacing.sm,
+                            ),
+                            child: AttachmentImage(
+                              path: coverImage,
+                              height: 150,
+                              borderRadius: AppRadius.lg - 4,
+                              hideWhenMissing: true,
+                            ),
                           ),
-                        ),
-                        const Icon(
-                          Icons.more_vert_rounded,
-                          color: AppColors.iconDefault,
-                          size: 22,
+                        if (preview.previewText.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          _highlight(
+                            preview.previewText,
+                            TextStyles.bodySecondary,
+                            maxLines: todos.isEmpty ? 3 : 2,
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                        ],
+                        ...todos.map(_buildTodoItem),
+                        const SizedBox(height: AppSpacing.xs),
+                        Row(
+                          children: [
+                            Text(
+                              AppDateFormat.relative(note.updatedAt),
+                              style: TextStyles.caption,
+                            ),
+                            const Spacer(),
+                            if (todos.isNotEmpty)
+                              Text(
+                                '$doneCount of ${todos.length} done',
+                                style: TextStyles.caption,
+                              ),
+                          ],
                         ),
                       ],
                     ),
-
-                    if (note.coverImage != null &&
-                        note.coverImage!.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.file(
-                          File(note.coverImage!),
-                          width: double.infinity,
-                          height: 140,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ],
-
-                    if (todoBlocks.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      ...todoBlocks.map((block) => _buildTodoItem(block)),
-                    ],
-
-                    if (todoBlocks.isEmpty && note.content.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      _highlightSearchTerm(
-                        note.content,
-                        TextStyles.noteContentStyle,
-                        maxLines: 2,
-                      ),
-                    ],
-
-                    if (note.tags.isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
-                              children: note.tags
-                                  .map((tag) => _buildTag(tag))
-                                  .toList(),
-                            ),
-                          ),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.calendar_today_outlined,
-                                size: 14,
-                                color: AppColors.textSecondary,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                _formatRelativeDate(note.createdAt),
-                                style: TextStyles.dateStyle,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -152,34 +145,54 @@ class NoteListCard extends StatelessWidget {
     );
   }
 
-  Widget _buildTodoItem(CheckboxBlock block) {
+  void _showActions(BuildContext context) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheetContext) => CupertinoActionSheet(
+        title: Text(
+          preview.title.trim().isEmpty ? AppStrings.untitled : preview.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.of(sheetContext).pop();
+              onDelete?.call();
+            },
+            child: const Text(AppStrings.deleteNote),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(sheetContext).pop(),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTodoItem(PreviewTodoItem block) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          Container(
-            width: 20,
-            height: 20,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(5),
-              border: Border.all(color: AppColors.todoCheckbox, width: 1.8),
-              color: block.isChecked
-                  ? AppColors.todoCheckbox.withValues(alpha: 0.08)
-                  : Colors.transparent,
-            ),
-            child: Icon(
-              Icons.check_rounded,
-              size: 14,
-              color: block.isChecked
-                  ? AppColors.todoCheckbox
-                  : Colors.transparent,
-            ),
+          Icon(
+            block.isChecked
+                ? CupertinoIcons.checkmark_circle_fill
+                : CupertinoIcons.circle,
+            size: 20,
+            color: block.isChecked ? AppColors.primary : AppColors.textTertiary,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: AppSpacing.sm + 2),
           Expanded(
-            child: _highlightSearchTerm(
-              block.data,
-              TextStyles.todoItemStyle,
+            child: _highlight(
+              block.text,
+              TextStyles.bodySecondary.copyWith(
+                color: block.isChecked ? AppColors.textSecondary : AppColors.textPrimary,
+                decoration: block.isChecked ? TextDecoration.lineThrough : null,
+              ),
               maxLines: 1,
             ),
           ),
@@ -188,79 +201,60 @@ class NoteListCard extends StatelessWidget {
     );
   }
 
-  Widget _buildTag(String tag) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.tagBackground,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.tagBorder, width: 0.8),
-      ),
-      child: Text(tag, style: TextStyles.tagStyle),
-    );
-  }
-
-  String _formatRelativeDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      return 'Today';
-    } else if (difference.inDays == 1) {
-      return '1 Day Ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} Days Ago';
-    } else if (difference.inDays < 30) {
-      final weeks = (difference.inDays / 7).floor();
-      return '$weeks Week${weeks > 1 ? 's' : ''} Ago';
-    } else {
-      final months = (difference.inDays / 30).floor();
-      return '$months Month${months > 1 ? 's' : ''} Ago';
+  Widget _highlight(String text, TextStyle style, {required int maxLines}) {
+    final query = searchQuery.trim();
+    final start = query.isEmpty ? -1 : text.toLowerCase().indexOf(query.toLowerCase());
+    if (start == -1) {
+      return Text(text, style: style, maxLines: maxLines, overflow: TextOverflow.ellipsis);
     }
-  }
-
-  Widget _highlightSearchTerm(
-    String text,
-    TextStyle baseStyle, {
-    required int maxLines,
-  }) {
-    if (searchQuery.isEmpty) {
-      return Text(
-        text,
-        style: baseStyle,
-        maxLines: maxLines,
-        overflow: TextOverflow.ellipsis,
-      );
-    }
-
-    final String lowerText = text.toLowerCase();
-    final String lowerQuery = searchQuery.toLowerCase();
-    final int startIndex = lowerText.indexOf(lowerQuery);
-
-    if (startIndex == -1) {
-      return Text(
-        text,
-        style: baseStyle,
-        maxLines: maxLines,
-        overflow: TextOverflow.ellipsis,
-      );
-    }
-
+    final end = start + query.length;
     return RichText(
       maxLines: maxLines,
       overflow: TextOverflow.ellipsis,
       text: TextSpan(
-        style: baseStyle,
+        style: style,
         children: [
-          TextSpan(text: text.substring(0, startIndex)),
+          TextSpan(text: text.substring(0, start)),
           TextSpan(
-            text: text.substring(startIndex, startIndex + searchQuery.length),
-            style: baseStyle.copyWith(
-              backgroundColor: AppColors.primary.withValues(alpha: 0.3),
+            text: text.substring(start, end),
+            style: style.copyWith(
+              backgroundColor: const Color(0x66FFD60A), // iOS find highlight
               color: AppColors.textPrimary,
             ),
           ),
-          TextSpan(text: text.substring(startIndex + searchQuery.length)),
+          TextSpan(text: text.substring(end)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConflictBadge extends StatelessWidget {
+  final String? field;
+  const _ConflictBadge({required this.field});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: const ShapeDecoration(
+        color: AppColors.warningSoft,
+        shape: StadiumBorder(side: BorderSide(color: Color(0xFFFFB74D))),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.call_split_rounded, size: 13, color: AppColors.warning),
+          const SizedBox(width: 4),
+          Text(
+            'Conflict: ${field ?? 'copy'}',
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.warning,
+            ),
+          ),
         ],
       ),
     );

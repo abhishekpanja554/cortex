@@ -1,0 +1,12 @@
+data: {"type": "conversation_id", "conversation_id": "2206e02f-f122-4b82-9de9-d25637ac22f4"}
+
+data: {"type": "sources", "sources": []}
+
+data: {"type": "token", "text": "I cannot"}
+
+data: {"type": "token", "text": " answer this based on the provided documents."}
+
+data: {"type": "token", "text": ""}
+
+data: {"type": "done"}
+
