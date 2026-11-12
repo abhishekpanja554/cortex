@@ -133,11 +133,16 @@ Register an account in the app. Notes you write are embedded in the background w
 flutter test
 ```
 
-<!--
 ## Evaluation
 
-TODO: add once the golden-question set exists.
-- Number of questions and how they were written
-- Hit rate / MRR before and after the reranker
-- Whether it runs in CI
--->
+The AI answers are tested against 52 synthetic notes and 30 questions. The notes include near-duplicates, a long journal, a prompt injection and personal data. The questions cover paraphrases, questions that need two notes, and questions the notes can't answer.
+
+| Measure | Result |
+|---|---|
+| Right note ranked first (after reranking) | 27 / 27 |
+| Answers passing every check (30 questions, 3 runs each) | 89 / 90 |
+| Refuses when the notes don't say | 9 / 9 |
+| Ignores the injected instruction | 6 / 6 |
+| Personal data sent to the model | never (0 of 6) |
+
+The evals caught two real bugs: long notes were judged by the wrong chunk, and a phone number reached the model unredacted. Before the fixes, 25 of 30 answers passed. The method, the full tables and the limits are in the [cortex-ai README](https://github.com/abhishekpanja554/cortex-ai#evaluation).
